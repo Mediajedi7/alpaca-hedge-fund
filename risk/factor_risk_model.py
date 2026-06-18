@@ -86,6 +86,29 @@ class FactorRiskModel:
             raise ValueError("factor model covers <2 of the requested tickers")
         return self._predicted_cov([self._idx[t] for t in ordered]), ordered
 
+    def factor_contributions(self, weights: dict[str, float]) -> dict:
+        """Each factor's share of total FACTOR variance + portfolio factor exposure."""
+        if self.X is None:
+            self.fit()
+        names = [t for t in weights if t in self._idx]
+        idxs = [self._idx[t] for t in names]
+        w = np.array([weights[t] for t in names])
+        exp = w @ self.X[idxs]                       # K factor exposures
+        fexp = self.factor_cov @ exp
+        fvar = float(exp @ fexp)
+        out = {}
+        for k, fac in enumerate(PARENTS):
+            share = (exp[k] * fexp[k] / fvar) if fvar else 0.0
+            out[fac] = {"exposure": float(exp[k]), "share": float(share)}
+        return out
+
+    def standardized_exposures(self, tickers: list[str]) -> tuple[np.ndarray, list[str]]:
+        """Return (N x K z-scored exposures, covered tickers) for stress testing."""
+        if self.X is None:
+            self.fit()
+        names = [t for t in tickers if t in self._idx]
+        return self.X[[self._idx[t] for t in names]], names
+
     def decompose(self, weights: dict[str, float]) -> dict:
         """Factor/specific variance split + per-name MCTR; flags MCTR% > 1.5x weight%."""
         if self.X is None:

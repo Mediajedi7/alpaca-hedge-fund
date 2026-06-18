@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datetime import date, datetime
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -269,61 +270,205 @@ def page_research():
 
 
 # ---------------- PAGE III: RISK ----------------
+CORR_SCALE = [[0.0, "#6b1f4d"], [0.35, "#152036"], [0.7, "#1f7a6b"], [1.0, "#1bd1a5"]]
+STRESS = {
+    "crisis_2008": {"mkt": -0.20, "f": {"momentum": -0.03, "quality": 0.02}},
+    "covid_2020": {"mkt": -0.18, "f": {"momentum": -0.02, "value": -0.03}},
+    "rate_hikes_2022": {"mkt": -0.06, "f": {"growth": -0.04, "value": 0.03}},
+    "sector_shock": {"mkt": -0.02, "f": {"institutional": -0.02}},
+    "momentum_reversal": {"mkt": 0.0, "f": {"momentum": -0.06}},
+    "short_squeeze": {"mkt": 0.01, "f": {"short_interest": -0.05}},
+}
+
+
+@st.cache_resource(show_spinner=False)
+def _frm(asof: str):
+    from risk.factor_risk_model import FactorRiskModel
+    return FactorRiskModel().fit()
+
+
+def _cb_bar(label, current, thresh):
+    pct = min(1.0, abs(current) / thresh) if thresh else 0
+    color = theme.SHORT if current <= -thresh else "#e0a106" if pct >= 0.5 else theme.LONG
+    return (f'<div style="margin:12px 0"><div style="display:flex;justify-content:space-between;'
+            f'font-size:13px;color:#aeb6cc"><span>{label}</span>'
+            f'<span class="mono">{current:+.2%} of {thresh:.2%}</span></div>'
+            f'<div style="background:#1b2438;border-radius:6px;height:9px;margin-top:5px">'
+            f'<div style="width:{pct * 100:.0f}%;background:{color};height:9px;border-radius:6px"></div></div></div>')
+
+
+def _credit_z():
+    h = _q("SELECT adj_close FROM daily_prices WHERE ticker='HYG' ORDER BY date")["adj_close"].pct_change()
+    t = _q("SELECT adj_close FROM daily_prices WHERE ticker='TLT' ORDER BY date")["adj_close"].pct_change()
+    spread = (t - h).dropna()  # TLT outperforming HYG = credit stress (spreads widening)
+    if len(spread) < 40:
+        return None
+    recent = spread.tail(10).mean()
+    return float((recent - spread.mean()) / spread.std())
+
+
 def page_risk():
-    st.markdown("## Risk")
+    from risk.pre_trade import halt_active
     cb = cfg.get("risk.circuit_breakers", {})
-    eq = metrics.daily_nav()
+    eq, rets = metrics.daily_nav(), metrics.returns()
+    daily = float(rets.iloc[-1]) if len(rets) else 0.0
+    weekly = (float(eq.iloc[-1] / eq.iloc[-6] - 1) if len(eq) > 6
+              else float(eq.iloc[-1] / eq.iloc[0] - 1) if len(eq) > 1 else 0.0)
     dd = metrics.drawdown()[1]
-    daily = float(eq.pct_change().iloc[-1]) if len(eq) > 1 else 0.0
-    bars = [("Daily", abs(min(daily, 0)), cb["daily_loss_close_all"]["threshold"]),
-            ("Drawdown", abs(dd), cb["drawdown_kill_switch"]["threshold"])]
-    for c, (lab, val, lim) in zip(st.columns(len(bars)), bars):
-        pct = min(1.0, val / lim) if lim else 0
-        c.markdown(theme.card(f"{lab} loss vs limit<br><div style='background:#222b40;border-radius:6px;'>"
-                              f"<div style='width:{pct*100:.0f}%;background:{theme.SHORT};height:10px;border-radius:6px'></div></div>"
-                              f"<span class='mono'>{val:.2%} / {lim:.0%}</span>"), unsafe_allow_html=True)
+    level = ("HALT", theme.SHORT) if halt_active() else \
+        ("WARN", "#e0a106") if (daily <= -cb["daily_loss_size_down"]["threshold"]
+                                or weekly <= -cb["weekly_loss_size_down"]["threshold"]) else ("OK", theme.LONG)
+    bars = (_cb_bar("Daily loss (warn at -1.5%)", daily, cb["daily_loss_size_down"]["threshold"])
+            + _cb_bar("Daily loss (halt at -2.5%)", daily, cb["daily_loss_close_all"]["threshold"])
+            + _cb_bar("Weekly loss (warn at -4%)", weekly, cb["weekly_loss_size_down"]["threshold"])
+            + _cb_bar("Drawdown (KILL at -8%)", dd, cb["drawdown_kill_switch"]["threshold"]))
+    st.markdown(f'<div class="card"><div class="l" style="letter-spacing:.14em">CIRCUIT BREAKERS · LEVEL '
+                f'<span style="color:{level[1]}">{level[0]}</span></div>{bars}'
+                f'<div class="mono" style="color:#8a93ad;margin-top:8px">Active actions: —</div></div>',
+                unsafe_allow_html=True)
+
+    # tail-risk KPIs
+    v, _ = jarvis.vix()
+    vchg = _q("SELECT adj_close FROM daily_prices WHERE ticker='^VIX' ORDER BY date DESC LIMIT 2")["adj_close"]
+    vchg = (vchg.iloc[0] / vchg.iloc[1] - 1) if len(vchg) > 1 else 0.0
+    cz = _credit_z()
+    k = [("VIX", f"{v:.1f}" if v else "—", f"chg {vchg:+.2%}", theme.LONG if vchg <= 0 else theme.SHORT),
+         ("Credit spread (HYG-TLT, z-score)", f"{cz:+.2f}σ" if cz is not None else "—",
+          "positive = spreads widening", theme.SHORT if (cz or 0) > 0 else theme.LONG),
+         ("Active gross-down actions", "—", "applied", "#f3f5fb")]
+    for c, (l, val, s, col) in zip(st.columns(3), k):
+        c.markdown(f'<div class="kpi"><div class="l">{l}</div><div class="v" style="color:{col}">{val}</div>'
+                   f'<div class="s">{s}</div></div>', unsafe_allow_html=True)
+
+    tp = _q("SELECT ticker,weight,sector,beta FROM target_portfolio "
+            "WHERE asof_date=(SELECT MAX(asof_date) FROM target_portfolio)")
+    if tp.empty:
+        st.info("Build a target portfolio on the Research page to populate the risk model.")
+        return
+    w = dict(zip(tp.ticker, tp.weight))
+    betas = dict(zip(tp.ticker, tp.beta.fillna(1.0)))
+    aum = float(cfg.get("portfolio.aum", 1_000_000))
 
     try:
-        from risk.factor_risk_model import FactorRiskModel
-        book = _q("SELECT ticker, weight FROM target_portfolio WHERE asof_date=(SELECT MAX(asof_date) FROM target_portfolio)")
-        w = dict(zip(book.ticker, book.weight))
-        dec = FactorRiskModel().fit().decompose(w)
-        d1, d2 = st.columns([40, 60])
-        donut = go.Figure(go.Pie(labels=["Factor", "Specific"],
-                                 values=[dec["factor_var"], dec["specific_var"]], hole=.6,
-                                 marker_colors=[theme.ACCENT, "#3b456a"]))
-        donut.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", height=300,
-                            title=f"Risk decomposition (ann vol {dec['annual_vol']:.1%})")
-        d1.plotly_chart(donut, use_container_width=True)
-        mctr = pd.DataFrame([{"ticker": t, "mctr%": v} for t, v in
-                             sorted(dec["mctr_pct"].items(), key=lambda kv: -abs(kv[1]))[:15]])
-        mctr["flag"] = mctr["ticker"].isin(dec["disproportionate_risk_flags"]).map({True: "⚠️", False: ""})
-        d2.markdown("#### Top marginal risk contributors")
-        d2.dataframe(mctr, use_container_width=True, height=300)
+        frm = _frm(_asof())
+        dec = frm.decompose(w)
+        fc = frm.factor_contributions(w)
     except Exception as e:  # noqa: BLE001
-        st.warning(f"Factor risk unavailable: {e}")
+        st.warning(f"Factor risk model unavailable: {e}")
+        return
 
-    # correlation heatmap of the book
-    book = _q("SELECT ticker FROM target_portfolio WHERE asof_date=(SELECT MAX(asof_date) FROM target_portfolio) LIMIT 25")
-    if not book.empty:
-        from portfolio import inputs
-        rets = inputs.returns(list(book.ticker), 120).dropna(axis=1, how="any")
-        if rets.shape[1] > 2:
-            corr = rets.corr()
-            fig = go.Figure(go.Heatmap(z=corr.values, x=corr.columns, y=corr.columns,
-                                       colorscale="RdBu", zmid=0))
-            fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", height=520,
-                              title="Position correlation (120d)")
-            st.plotly_chart(fig, use_container_width=True)
+    # risk decomposition donut + vols
+    st.write("")
+    g1, g2, g3 = st.columns([34, 33, 33])
+    fshare = dec["factor_share"] or 0
+    donut = go.Figure(go.Pie(labels=["Factor (systematic)", "Specific"],
+                             values=[dec["factor_var"], dec["specific_var"]], hole=.62, sort=False,
+                             marker_colors=[theme.LONG, "#3b7fd1"], textinfo="label+percent"))
+    donut.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", height=260,
+                        showlegend=False, margin=dict(t=30, b=0, l=0, r=0), title="Risk decomposition")
+    g1.plotly_chart(donut, use_container_width=True)
+    g2.markdown(f'<div class="kpi"><div class="l">Total ann. vol</div><div class="v">{dec["annual_vol"]:.2%}</div>'
+                f'<div class="s">predicted, factor-model based</div></div>', unsafe_allow_html=True)
+    g3.markdown(f'<div class="kpi"><div class="l">Factor vol</div>'
+                f'<div class="v" style="color:{theme.LONG}">{(dec["factor_var"] ** 0.5):.2%}</div>'
+                f'<div class="s">{fshare:.0%} of variance</div></div>', unsafe_allow_html=True)
 
-    # simple market-shock stress table
-    st.markdown("#### Stress scenarios (market-beta approximation)")
-    bk = _q("SELECT weight, beta FROM target_portfolio WHERE asof_date=(SELECT MAX(asof_date) FROM target_portfolio)")
-    net_beta = float((bk.weight * bk.beta.fillna(1.0)).sum()) if not bk.empty else 0.0
-    scen = {"Market -5%": -0.05, "Market -10%": -0.10, "Market +5%": 0.05,
-            "Risk-off -3%": -0.03, "Melt-up +8%": 0.08, "Flat": 0.0}
-    st.dataframe(pd.DataFrame([{"scenario": k, "est P&L": f"{net_beta*v:+.2%}"} for k, v in scen.items()]),
-                 use_container_width=True)
+    # factor risk contributions + MCTR top 12
+    cL, cR = st.columns(2)
+    rows = ""
+    for fac, d in sorted(fc.items(), key=lambda kv: -abs(kv[1]["share"])):
+        sh = d["share"]
+        rows += (f'<div style="display:flex;align-items:center;gap:10px;margin:8px 0">'
+                 f'<span style="width:110px">{fac}</span>'
+                 f'<span class="mono" style="width:80px;color:#8a93ad">exp {d["exposure"]:+.2f}</span>'
+                 f'<div style="flex:1;background:#1b2438;border-radius:5px;height:8px">'
+                 f'<div style="width:{min(100, abs(sh) * 100):.0f}%;background:{theme.LONG};height:8px;border-radius:5px"></div></div>'
+                 f'<span class="mono" style="width:64px;text-align:right">{sh:+.1%}</span></div>')
+    cL.markdown(f'<div class="card"><div class="l">FACTOR RISK CONTRIBUTIONS</div>'
+                f'<div class="s" style="margin-bottom:8px">Each factor\'s share of total factor variance</div>'
+                f'{rows}</div>', unsafe_allow_html=True)
+
+    mrows = ""
+    flags = set(dec["disproportionate_risk_flags"])
+    for t, mp in sorted(dec["mctr_pct"].items(), key=lambda kv: -abs(kv[1]))[:12]:
+        side = "L" if w.get(t, 0) > 0 else "S"
+        scol = theme.LONG if side == "L" else theme.SHORT
+        fire = " 🔥" if t in flags else ""
+        mrows += (f'<div style="display:flex;align-items:center;gap:10px;margin:8px 0">'
+                  f'<span style="width:70px"><b style="color:{scol}">{side}</b> {t}</span>'
+                  f'<span class="mono" style="width:64px;color:#8a93ad">wt {abs(w.get(t, 0)):.1%}</span>'
+                  f'<div style="flex:1;background:#1b2438;border-radius:5px;height:8px">'
+                  f'<div style="width:{min(100, abs(mp) * 100):.0f}%;background:{scol};height:8px;border-radius:5px"></div></div>'
+                  f'<span class="mono" style="width:74px;text-align:right">{mp:+.1%}{fire}</span></div>')
+    cR.markdown(f'<div class="card"><div class="l">MARGINAL RISK CONTRIBUTORS — TOP 12</div>'
+                f'<div class="s" style="margin-bottom:8px">Position MCTR · 🔥 = &gt;1.5× its weight in risk</div>'
+                f'{mrows}</div>', unsafe_allow_html=True)
+
+    # factor exposure spread + stress test
+    sL, sR = st.columns(2)
+    sc = _q(f"SELECT ticker,{','.join(FACS)} FROM scores WHERE asof_date=?", (_asof(),)).set_index("ticker")
+    longs = [t for t in w if w[t] > 0 and t in sc.index]
+    shorts = [t for t in w if w[t] < 0 and t in sc.index]
+    spread = {FAC_LABELS[i]: (sc.loc[longs, f].mean() - sc.loc[shorts, f].mean())
+              for i, f in enumerate(FACS)} if longs and shorts else {}
+    if spread:
+        ss = pd.Series(spread).sort_values()
+        fig = go.Figure(go.Bar(x=ss.values, y=ss.index, orientation="h", marker_color=theme.LONG))
+        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", height=320,
+                          title="Factor exposure spread — Long − Short (percentile pts)",
+                          margin=dict(l=10, r=10, t=40, b=10))
+        sL.plotly_chart(fig, use_container_width=True)
+
+    Z, znames = frm.standardized_exposures(list(w))
+    zb = np.array([betas.get(t, 1.0) for t in znames])
+    zw = np.array([w[t] for t in znames])
+    stress_rows = []
+    for name, sh in STRESS.items():
+        fvec = np.array([sh["f"].get(f, 0.0) for f in FACS])
+        ret = zb * sh["mkt"] + Z @ fvec
+        pnl = zw * aum * ret
+        total = float(pnl.sum())
+        long_pnl = float(pnl[zw > 0].sum())
+        short_pnl = float(pnl[zw < 0].sum())
+        stress_rows.append({"scenario": name, "P&L $": f"${total:,.0f}", "P&L %": f"{total / aum:+.2%}",
+                            "Long $": f"${long_pnl:,.0f}", "Short $": f"${short_pnl:,.0f}"})
+    sR.markdown('<div class="l" style="margin-bottom:6px">STRESS SCENARIOS</div>', unsafe_allow_html=True)
+    sR.dataframe(pd.DataFrame(stress_rows), use_container_width=True, hide_index=True, height=260)
+
+    # 60-day correlation heatmap + effective bets
+    from portfolio import inputs
+    book_tk = [t for t in w]
+    r60 = inputs.returns(book_tk, 60).dropna(axis=1, how="any")
+    if r60.shape[1] > 2:
+        labels = [f"{t} ({'L' if w.get(t, 0) > 0 else 'S'})" for t in r60.columns]
+        corr = r60.corr()
+        fig = go.Figure(go.Heatmap(z=corr.values, x=labels, y=labels, colorscale=CORR_SCALE, zmin=-0.3, zmax=1))
+        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", height=560,
+                          title="60-day return correlation", yaxis=dict(autorange="reversed"),
+                          margin=dict(l=10, r=10, t=40, b=10))
+        st.plotly_chart(fig, use_container_width=True)
+
+        def eff_bets(cols):
+            sub = r60[[c for c in cols if c in r60.columns]]
+            if sub.shape[1] < 2:
+                return sub.shape[1], 0.0
+            cm = sub.corr().values
+            eig = np.linalg.eigvalsh(cm)
+            eig = eig[eig > 1e-9]
+            ne = (eig.sum() ** 2) / np.square(eig).sum()
+            avg = cm[np.triu_indices_from(cm, 1)].mean()
+            return ne, avg
+        ln, la = eff_bets(longs)
+        sn, sa = eff_bets(shorts)
+        e1, e2 = st.columns(2)
+        e1.markdown(f'<div class="card"><div class="l">LONG BOOK DIVERSIFICATION</div>'
+                    f'<div class="v" style="font-size:30px"><span class="mono">{ln:.2f}</span> '
+                    f'<span class="s">effective bets / {len(longs)} positions</span></div>'
+                    f'<div class="s">avg corr {la:.2f}</div></div>', unsafe_allow_html=True)
+        e2.markdown(f'<div class="card"><div class="l">SHORT BOOK DIVERSIFICATION</div>'
+                    f'<div class="v" style="font-size:30px"><span class="mono">{sn:.2f}</span> '
+                    f'<span class="s">effective bets / {len(shorts)} positions</span></div>'
+                    f'<div class="s">avg corr {sa:.2f}</div></div>', unsafe_allow_html=True)
 
 
 # ---------------- PAGE IV: PERFORMANCE ----------------
