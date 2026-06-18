@@ -24,3 +24,5 @@ alpaca-py==0.30.1
 # --- Reporting / dashboard (Layer 7) ---
 streamlit==1.39.0
 plotly==5.24.1
+pyotp==2.9.0
+qrcode==7.4.2

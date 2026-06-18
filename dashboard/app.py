@@ -26,6 +26,9 @@ from reporting import analytics, attribution, jarvis, metrics
 st.set_page_config(page_title="JARVIS — Mediajedi Hedge Fund", layout="wide", page_icon="◆")
 st.markdown(theme.css(), unsafe_allow_html=True)
 
+from dashboard import auth  # noqa: E402
+auth.require_login()  # gates the app when AUTH_* is configured in .env
+
 NAV = [("I", "PORTFOLIO"), ("II", "RESEARCH"), ("III", "RISK"),
        ("IV", "PERFORMANCE"), ("V", "EXECUTION"), ("VI", "LETTER")]
 try:
