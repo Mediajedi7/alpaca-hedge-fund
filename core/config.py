@@ -11,7 +11,9 @@ import yaml
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(ROOT / ".env")
+# override=True so an edited .env wins over a stale value baked into the container
+# environment at startup (compose env_file) — avoids needing a container restart.
+load_dotenv(ROOT / ".env", override=True)
 
 
 @lru_cache(maxsize=1)

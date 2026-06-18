@@ -17,12 +17,11 @@ live/paper rule still applies — never touch live from here).
   (each sector spans ~0–100), economically coherent (semis top IT, value-traps bottom),
   Piotroski distribution bell-shaped. Scores persist to `scores` + `subfactor_scores`.
   Nightly cron (`run_scoring.py --no-filings --no-13f`, 17:15 ET) now active.
-- **Layer 3 (AI Analysis / Claude): CODE COMPLETE; non-API surface verified.** 10 modules
-  in `analysis/` + `run_analysis.py`. Model `claude-sonnet-4-6` (prompt said 4-5; 4-6 is the
-  live Sonnet). Verified without the key: JSON extraction, combined score (60/40, 100%-quant
-  fallback), reports, `--estimate-cost` (~$0.73 cold-cache / 40 candidates). **PENDING: live
-  Claude smoke test** — needs `ANTHROPIC_API_KEY` in `.env` (Alpaca keys are set; Anthropic is not).
-  Earnings analyzer dormant (no FMP transcripts). Cost ceiling $25 (`config.analysis.cost_ceiling_usd`).
+- **Layer 3 (AI Analysis / Claude): COMPLETE & LIVE-VERIFIED.** 10 modules in `analysis/` +
+  `run_analysis.py`. Model `claude-sonnet-4-6`. Live `--ticker AAPL` ran filing + insider
+  analyzers against Claude (2 calls, $0.04), JSON parsed, cost tracker correct. Earnings
+  analyzer dormant (no FMP transcripts). All keys now in `.env` (Anthropic + Alpaca paper + FMP + SEC).
+  Cost ceiling $25.
 - **NEXT: Layer 4 (Portfolio Construction).** Spec in `docs/BUILD_PLAN.md` §4. Write MVO against
   a covariance-provider interface (Layer 5 swaps in factor-cov later).
 - Layers 5–7 not started.
