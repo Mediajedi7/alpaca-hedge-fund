@@ -61,6 +61,22 @@ def page_portfolio():
                     '<div class="subtitle">Long / Short Hedge Fund Analyst</div>', unsafe_allow_html=True)
         q = st.text_input("ask", placeholder="Ask anything…", label_visibility="collapsed")
         asked = st.button("ASK JARVIS", type="primary")
+
+        if asked and q:
+            with st.spinner("JARVIS analyzing…"):
+                ans = jarvis.ask(q, st.session_state.jarvis_history)
+            st.session_state.jarvis_history += [{"role": "user", "content": q},
+                                                {"role": "assistant", "content": ans}]
+
+        # latest exchange rendered inline (question label + answer card)
+        hist = st.session_state.jarvis_history
+        if hist:
+            last_q = next((t["content"] for t in reversed(hist) if t["role"] == "user"), "")
+            last_a = next((t["content"] for t in reversed(hist) if t["role"] == "assistant"), "")
+            body = last_a.replace("\n\n", "</p><p>").replace("\n", "<br>")
+            st.markdown(f'<div class="ask-q">{last_q}</div>'
+                        f'<div class="ask-a"><p>{body}</p></div>', unsafe_allow_html=True)
+
         items = [("Universe", m["universe"]), ("Long Cand.", m["long_candidates"]),
                  ("Short Cand.", m["short_candidates"]), ("Positions", m["positions"]),
                  ("Crowding", m["crowding"]), ("Insider Events", m["insider_events"]),
@@ -74,15 +90,6 @@ def page_portfolio():
         else:
             st.markdown('<div class="robot fallback"><span class="accent mono" '
                         'style="font-size:40px;opacity:.45">◆ ◆ ◆</span></div>', unsafe_allow_html=True)
-
-    if asked and q:
-        with st.spinner("JARVIS analyzing…"):
-            ans = jarvis.ask(q, st.session_state.jarvis_history)
-        st.session_state.jarvis_history += [{"role": "user", "content": q},
-                                            {"role": "assistant", "content": ans}]
-    for t in st.session_state.jarvis_history[-12:]:
-        with st.chat_message("user" if t["role"] == "user" else "assistant"):
-            st.write(t["content"])
 
 
 # ---------------- PAGE II: RESEARCH ----------------

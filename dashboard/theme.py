@@ -48,6 +48,13 @@ h1,h2,h3,h4 {{ font-family: '{SANS}', sans-serif; font-weight: 800; color: #f3f5
                   -webkit-mask-image:none; mask-image:none; border:1px solid #1c2438;
                   display:flex; align-items:center; justify-content:center; }}
 
+/* inline JARVIS answer on the cover */
+.ask-q {{ font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: #7e879f;
+         font-weight: 600; margin: 22px 0 10px; }}
+.ask-a {{ background: linear-gradient(135deg, {CARD1}, {CARD2}); border-left: 3px solid {ACCENT};
+         border-radius: 12px; padding: 18px 22px; line-height: 1.65; color: #dfe3ee; font-size: 15px;
+         max-height: 460px; overflow-y: auto; }}
+
 /* plain metrics grid (no boxes) */
 .mgrid {{ display: grid; grid-template-columns: repeat(5, 1fr); gap: 26px 10px; margin-top: 8px; }}
 .mgrid .mv {{ font-size: 34px; font-weight: 800; color: #f3f5fb; line-height: 1; }}
