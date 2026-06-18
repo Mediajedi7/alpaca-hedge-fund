@@ -1,7 +1,7 @@
 # Meridian Capital Partners — 7-Layer Build Plan
 
 Condensed from Tommy's 7 original prompts. Numeric parameters live in `config.yaml`
-(single source of truth); this doc preserves structure/intent. **Layer 1 = done.**
+(single source of truth); this doc preserves structure/intent. **ALL 7 LAYERS DONE.**
 
 ## 1. Data Infrastructure — DONE
 5 source groups → SQLite (`cache/meridian.db`): universe (S&P500 + benchmarks/sector
@@ -77,7 +77,7 @@ poll 5s → cancel+retry (3×) → record signal_price. `costs.py` slippage (fil
 cache 7d. `order_manager.py` pending/partial/filled/cancelled, SIGINT→cancel pending keep
 positions. Entry `run_execution.py --dry-run|--execute`.
 
-## 7. Reporting + Dashboard
+## 7. Reporting + Dashboard — DONE
 **Reporting**: daily P&L attribution (beta/sector/factor/alpha → `output/daily_attribution.csv`),
 position attribution (FIFO, Spearman score↔return), win/loss slices, sector-relative alpha,
 turnover + FIFO tax (ST 37% / LT 20%), markdown tear sheet, Claude weekly commentary (JARVIS,

@@ -177,12 +177,14 @@ dashboard:
   market_open: "09:30"
   market_close: "16:00"
   timezone: "America/New_York"
-  theme:
+  theme:                           # blended: JARVIS dark + day-trader green/red
     background: "#0b0e17"
     card_gradient: ["#131827", "#1a2035"]
     accent: "#6366f1"
-    long: "#10b981"
-    short: "#f43f5e"
+    long: "#27ae60"                # day-trader gains green
+    short: "#c0392b"               # day-trader losses red
+    font_sans: "Plus Jakarta Sans"
+    font_mono: "JetBrains Mono"
 
 schedule:
   # Daily scoring runs in-container via supercronic (replaces the macOS launchd plist).

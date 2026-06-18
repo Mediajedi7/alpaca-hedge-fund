@@ -49,9 +49,27 @@ live/paper rule still applies — never touch live from here).
   pass every 5 min during market hours** (not an always-on watchdog) — see `crontab`. It is
   PROTECTIVE ONLY (size-down/close-all/kill-switch/force-close); it never opens positions.
   Activates on next container restart (supercronic reads crontab at start).
-- **NEXT: Layer 7 (Reporting + Dashboard).** Spec `docs/BUILD_PLAN.md` §7. Streamlit on :8502
-  (LAN-only — start the `dashboard` compose service), JARVIS persona, 6 pages, reports/LP letter.
-- Portfolio execution stays MANUAL (human-in-the-loop via dashboard / run_execution.py).
+- **Layer 7 (Reporting + Dashboard): COMPLETE & verified.** `reporting/`: metrics (equity/
+  Sharpe/drawdown/monthly), attribution (P&L beta/sector/factor/alpha -> daily_attribution.csv;
+  sector-relative alpha), analytics (turnover, FIFO round-trips, win/loss, tax), tear_sheet,
+  jarvis (snapshot + chat + LP letter + weekly commentary via Claude). `dashboard/`: theme.py
+  (blended palette) + app.py (Streamlit, 6 roman-numeral pages: Portfolio/Research/Risk/
+  Performance/Execution/Letter, JARVIS chat, auto-refresh during market hours). All 6 pages
+  pass headless AppTest. Container `alpaca-hedge-fund-dashboard` runs `streamlit ... :8502`
+  (LAN-only). Reach via `jarvis.mediajedi.net` on VPN/split-horizon — do NOT port-forward.
+
+## PROJECT COMPLETE — all 7 layers built & verified
+Data -> Scoring -> AI -> Portfolio -> Risk -> Execution -> Reporting/Dashboard.
+Two containers run on the NAS: `alpaca-hedge-fund` (supercronic: 17:15 daily scoring +
+5-min intraday risk monitor) and `alpaca-hedge-fund-dashboard` (Streamlit :8502).
+Execution stays MANUAL (human-in-the-loop via dashboard / run_execution.py).
+The macOS launchd plist in the original prompt is SUPERSEDED by the container's supercronic cron.
+
+### Operational follow-ups (not blocking)
+- Full insider (Form 4) + 13-F pulls to make those factors/metrics real (daily uses --no-filings --no-13f).
+- Wire FactorRiskModel as the default MVO cov_provider in a full rebalance orchestration.
+- 1 stray AMD share in the paper account from the Layer 6 live test.
+- Risk analyzer needs 10-K doc text cached (filings pulled with fetch_docs=False so far).
 
 ### Layer 5 notes
 - To use factor cov in MVO: `mvo_optimizer.optimize(cov_provider=FactorRiskModel().fit())`.
