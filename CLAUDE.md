@@ -22,9 +22,22 @@ live/paper rule still applies — never touch live from here).
   analyzers against Claude (2 calls, $0.04), JSON parsed, cost tracker correct. Earnings
   analyzer dormant (no FMP transcripts). All keys now in `.env` (Anthropic + Alpaca paper + FMP + SEC).
   Cost ceiling $25.
-- **NEXT: Layer 4 (Portfolio Construction).** Spec in `docs/BUILD_PLAN.md` §4. Write MVO against
-  a covariance-provider interface (Layer 5 swaps in factor-cov later).
-- Layers 5–7 not started.
+- **Layer 4 (Portfolio Construction): COMPLETE & verified.** `portfolio/`: `mvo_optimizer`
+  (scipy SLSQP, all constraints jointly — gross/net/beta/sector all hit exactly), `optimizer`
+  (conviction-tilt fallback), `transaction_costs`, `covariance` (HistoricalCovarianceProvider
+  behind a `CovarianceProvider` Protocol — **Layer 5 factor-cov drops in here**), `inputs`
+  (returns/beta-vs-SPY/ADV/vol/range), `construct` (expected-return map, candidate selection,
+  `target_portfolio` table). Entry `run_portfolio.py --optimize-method mvo|conviction`. MVO
+  non-convergence falls back to conviction (verified). Beta now computed (`inputs.betas`).
+- **NEXT: Layer 5 (Risk Management).** Spec `docs/BUILD_PLAN.md` §5. Barra factor model
+  implements the `CovarianceProvider.cov()` interface and feeds MVO. Absolute-veto pre-trade
+  checks + circuit breakers. Earnings 50% cut + all veto limits owned HERE (config `risk.*`).
+- Layers 6–7 not started.
+
+### Layer 4 notes
+- AUM for sizing: `config portfolio.aum` (1M paper; Layer 6 overrides from Alpaca).
+- Conviction-tilt hard-guarantees gross + per-position caps + tilts, but does NOT jointly
+  solve net-beta/sector-net (it's the fallback); MVO solves all jointly and is the rigorous path.
 
 ### Layer 3 notes
 - `ALPACA_API_KEY`/`ALPACA_SECRET_KEY` now set in `.env` (paper account, `PK` prefix). `ANTHROPIC_API_KEY` still empty.

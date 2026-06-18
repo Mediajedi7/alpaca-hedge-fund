@@ -109,6 +109,8 @@ portfolio:
   position_min_pct: 0.005
   position_max_pct: 0.05           # matches veto position cap (5% AUM)
   max_position_pct_adv: 0.05       # liquidity: no position > 5% of 20-day ADV
+  aum: 1000000                     # paper AUM for sizing (Layer 6 overrides from Alpaca)
+  beta_lookback_days: 252          # beta regression window vs SPY
 
 # -----------------------------------------------------------------------------
 # LAYER 4/6 — Transaction Cost Model

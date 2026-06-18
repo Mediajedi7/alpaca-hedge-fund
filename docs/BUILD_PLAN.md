@@ -47,7 +47,7 @@ filing/forensic (8Q fundamentals), risk (10-K Risk Factors), insider. Sector ran
 combined score (60% quant / 40% Claude avg; 100% quant if no Claude, no penalty). Markdown
 reports per candidate. Entry `run_analysis.py --estimate-cost --ticker --sector`.
 
-## 4. Portfolio Construction
+## 4. Portfolio Construction — DONE
 Two optimizers. **MVO** (`portfolio/mvo_optimizer.py`): scipy SLSQP, maximize μᵀw − λwᵀΣw;
 expected return = composite linear (100→+15%/yr, 0→−15%/yr); 120d cov (later replaced by
 Layer 5 factor-cov — **write against a covariance-provider interface**); constraints from
