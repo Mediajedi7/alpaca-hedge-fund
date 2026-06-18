@@ -77,6 +77,12 @@ class Broker:
     def get_asset(self, symbol: str):
         return self._retry(self.client.get_asset, symbol)
 
+    def open_orders(self) -> list:
+        from alpaca.trading.enums import QueryOrderStatus
+        from alpaca.trading.requests import GetOrdersRequest
+        return self._retry(self.client.get_orders,
+                           filter=GetOrdersRequest(status=QueryOrderStatus.OPEN))
+
     # --- orders ---
     def submit_limit(self, symbol: str, qty: float, side: str, limit_price: float):
         req = LimitOrderRequest(

@@ -625,30 +625,65 @@ def page_performance():
 
 # ---------------- PAGE V: EXECUTION ----------------
 def page_execution():
-    st.markdown("## Execution")
     from execution import costs
     s = costs.slippage_stats()
-    for c, (lab, v) in zip(st.columns(4), [("Filled (30d)", s["n"]), ("Avg slip bps", s["avg_bps"]),
-                           ("Total slip $", s["total_dollar_cost"]), ("Worst bps", s["p95_bps"])]):
-        c.markdown(theme.metric(lab, v), unsafe_allow_html=True)
+    notional30 = _q("SELECT COALESCE(SUM(notional),0) n FROM orders WHERE fill_price IS NOT NULL "
+                    "AND ts>=datetime('now','-30 day')").iloc[0]["n"]
+    db_total = int(_q("SELECT COUNT(*) c FROM orders WHERE fill_price IS NOT NULL").iloc[0]["c"])
 
-    st.markdown("#### Recent trades")
-    recent = _q("SELECT ts,ticker,side,shares,limit_price,fill_price,slippage_bps,status FROM orders "
-                "ORDER BY ts DESC LIMIT 200")
-    st.dataframe(recent, use_container_width=True, height=300)
+    open_list, alpaca_err = [], None
+    try:
+        from execution.broker import Broker
+        broker = Broker()
+        open_list = broker.open_orders()
+    except Exception as e:  # noqa: BLE001
+        alpaca_err = str(e)
 
-    st.markdown("#### Worst 5 fills")
-    st.dataframe(pd.DataFrame(costs.worst_fills(5)), use_container_width=True)
+    k = st.columns(4)
+    _kpi(k[0], "Filled orders (last 30d)", s["n"], f"total notional ${notional30:,.0f}")
+    _kpi(k[1], "Avg slippage", f"{s['avg_bps']:.1f} bps", f"p95 {s['p95_bps']:.1f} bps")
+    _kpi(k[2], "Total slippage cost (30d)", f"${s['total_dollar_cost']:,.0f}", "positive = cost to fund",
+         theme.SHORT if s['total_dollar_cost'] > 0 else theme.LONG)
+    _kpi(k[3], "Open orders", len(open_list), f"{db_total} filled in DB total")
 
-    with st.expander("Live Alpaca positions / open orders"):
-        try:
-            from execution.broker import Broker
-            b = Broker()
-            pos = b.positions()
-            st.write({s: {"qty": p.qty, "mv": p.market_value, "uPL": p.unrealized_pl}
-                      for s, p in pos.items()} or "No open positions")
-        except Exception as e:  # noqa: BLE001
-            st.warning(f"Alpaca unavailable: {e}")
+    # open orders
+    st.write("")
+    if alpaca_err:
+        st.markdown(theme.card(f"<div class='l'>OPEN ORDERS</div>Alpaca unavailable: {alpaca_err}"), unsafe_allow_html=True)
+    elif not open_list:
+        st.markdown(theme.card("<div class='l'>OPEN ORDERS</div>"
+                               "<span class='mono' style='color:#8a93ad'>No pending orders.</span>"), unsafe_allow_html=True)
+    else:
+        oo = pd.DataFrame([{"submitted_at": str(o.submitted_at), "ticker": o.symbol, "side": str(o.side.value),
+                            "qty": float(o.qty), "limit": float(o.limit_price or 0),
+                            "filled": float(o.filled_qty or 0), "status": str(o.status.value)} for o in open_list])
+        st.markdown("<div class='l'>OPEN ORDERS</div>", unsafe_allow_html=True)
+        st.dataframe(oo, use_container_width=True, hide_index=True)
+
+    # recent trades
+    st.markdown("<div class='l' style='margin-top:8px'>RECENT TRADES — LAST 200</div>", unsafe_allow_html=True)
+    recent = _q("SELECT ts AS submitted_at, ticker, side AS action, shares AS qty, limit_price, "
+                "fill_price, slippage_bps FROM orders ORDER BY ts DESC LIMIT 200")
+    st.dataframe(recent, use_container_width=True, height=360, hide_index=True)
+
+    # worst fills + short availability + daily notional turnover
+    w1, w2 = st.columns(2)
+    with w1:
+        st.markdown("<div class='l'>WORST 5 FILLS</div>", unsafe_allow_html=True)
+        st.dataframe(pd.DataFrame(costs.worst_fills(5)), use_container_width=True, hide_index=True)
+    with w2:
+        st.markdown("<div class='l'>SHORT AVAILABILITY (current shorts)</div>", unsafe_allow_html=True)
+        sa = _q("SELECT s.ticker, s.shortable, s.easy_to_borrow FROM short_availability s "
+                "JOIN target_portfolio t ON t.ticker=s.ticker AND t.weight<0 "
+                "WHERE t.asof_date=(SELECT MAX(asof_date) FROM target_portfolio)")
+        st.dataframe(sa if not sa.empty else pd.DataFrame({"info": ["no short-availability data cached"]}),
+                     use_container_width=True, hide_index=True)
+
+    st.markdown("<div class='l' style='margin-top:8px'>DAILY NOTIONAL TURNOVER</div>", unsafe_allow_html=True)
+    dnt = _q("SELECT substr(ts,1,10) AS date, COUNT(*) AS orders, ROUND(SUM(notional),0) AS notional "
+             "FROM orders WHERE fill_price IS NOT NULL GROUP BY date ORDER BY date DESC LIMIT 30")
+    st.dataframe(dnt if not dnt.empty else pd.DataFrame({"info": ["no fills yet"]}),
+                 use_container_width=True, hide_index=True)
 
 
 # ---------------- PAGE VI: LETTER ----------------
