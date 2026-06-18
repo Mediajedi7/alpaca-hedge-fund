@@ -23,9 +23,13 @@ from reporting import analytics, attribution, jarvis, metrics
 st.set_page_config(page_title="JARVIS — Meridian Capital", layout="wide", page_icon="◆")
 st.markdown(theme.css(), unsafe_allow_html=True)
 
-PAGES = ["I  PORTFOLIO", "II  RESEARCH", "III  RISK", "IV  PERFORMANCE", "V  EXECUTION", "VI  LETTER"]
-if "page" not in st.session_state:
-    st.session_state.page = 0
+NAV = [("I", "PORTFOLIO"), ("II", "RESEARCH"), ("III", "RISK"),
+       ("IV", "PERFORMANCE"), ("V", "EXECUTION"), ("VI", "LETTER")]
+try:
+    page = int(st.query_params.get("page", 0))
+except (TypeError, ValueError):
+    page = 0
+page = max(0, min(page, len(NAV) - 1))
 if "jarvis_history" not in st.session_state:
     st.session_state.jarvis_history = []
 
@@ -48,43 +52,30 @@ def _asof(table="scores"):
     return r["d"] if r else None
 
 
-# ---------------- nav ----------------
-cols = st.columns(len(PAGES))
-for i, (c, name) in enumerate(zip(cols, PAGES)):
-    with c:
-        active = "navactive" if st.session_state.page == i else ""
-        st.markdown(f'<div class="{active}">', unsafe_allow_html=True)
-        if st.button(name, key=f"nav{i}", use_container_width=True):
-            st.session_state.page = i
-        st.markdown("</div>", unsafe_allow_html=True)
-
-
-# ---------------- PAGE I: PORTFOLIO ----------------
+# ---------------- PAGE I: PORTFOLIO (cover) ----------------
 def page_portfolio():
     m = jarvis.metrics()
-    left, right = st.columns([44, 56])
+    left, right = st.columns([44, 56], gap="large")
     with left:
-        st.markdown('<div class="jarvis">JARVIS</div>', unsafe_allow_html=True)
-        st.markdown('<div class="subtitle">Long / Short Hedge Fund Analyst</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="badge">VIX {m["vix"]} · {m["vix_regime"].upper()}</div> '
-                    f'<span class="badge">data {m.get("data_asof") or "—"}</span>', unsafe_allow_html=True)
+        st.markdown('<div class="jarvis">JARVIS</div>'
+                    '<div class="subtitle">Long / Short Hedge Fund Analyst</div>', unsafe_allow_html=True)
+        q = st.text_input("ask", placeholder="Ask anything…", label_visibility="collapsed")
+        asked = st.button("ASK JARVIS", type="primary")
+        items = [("Universe", m["universe"]), ("Long Cand.", m["long_candidates"]),
+                 ("Short Cand.", m["short_candidates"]), ("Positions", m["positions"]),
+                 ("Crowding", m["crowding"]), ("Insider Events", m["insider_events"]),
+                 ("CEO/CFO Buys", m["ceo_buys"]), ("Cluster Buys", m["cluster_buys"]),
+                 ("VIX", m["vix"]), ("Earnings · 7d", m["earnings_7d"])]
+        st.markdown(theme.metrics_grid(items), unsafe_allow_html=True)
     with right:
-        st.markdown('<div class="cover" style="height:170px;display:flex;align-items:center;'
-                    'justify-content:center;"><span class="accent mono" style="font-size:48px;">◆ ◆ ◆</span></div>',
-                    unsafe_allow_html=True)
+        uri = theme.robot_data_uri()
+        if uri:
+            st.markdown(f'<div class="robot" style="background-image:url({uri})"></div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="robot fallback"><span class="accent mono" '
+                        'style="font-size:40px;opacity:.45">◆ ◆ ◆</span></div>', unsafe_allow_html=True)
 
-    items = [("Universe", m["universe"]), ("Long Cand", m["long_candidates"]),
-             ("Short Cand", m["short_candidates"]), ("Positions", m["positions"]),
-             ("Crowding", m["crowding"]), ("Insider Ev", m["insider_events"]),
-             ("CEO Buys", m["ceo_buys"]), ("Cluster Buys", m["cluster_buys"]),
-             ("VIX", m["vix"]), ("Earnings 7d", m["earnings_7d"])]
-    for row in (items[:5], items[5:]):
-        for c, (lab, val) in zip(st.columns(5), row):
-            c.markdown(theme.metric(lab, val), unsafe_allow_html=True)
-
-    st.markdown("### Ask JARVIS")
-    q = st.chat_input("Ask about the book, a name, factor leadership, risk…")
-    if q:
+    if asked and q:
         with st.spinner("JARVIS analyzing…"):
             ans = jarvis.ask(q, st.session_state.jarvis_history)
         st.session_state.jarvis_history += [{"role": "user", "content": q},
@@ -317,6 +308,13 @@ def page_letter():
 
 PAGE_FNS = [page_portfolio, page_research, page_risk, page_performance, page_execution, page_letter]
 try:
-    PAGE_FNS[st.session_state.page]()
+    PAGE_FNS[page]()
 except Exception as e:  # noqa: BLE001
     st.error(f"Page error: {e}")
+
+# fixed bottom pill nav (query-param links — true bottom bar like the reference)
+nav_html = '<div class="navbar">' + "".join(
+    f'<a target="_self" href="?page={i}" class="{"active" if i == page else ""}">'
+    f'<span class="rn">{rn}</span>{label}</a>' for i, (rn, label) in enumerate(NAV)
+) + "</div>"
+st.markdown(nav_html, unsafe_allow_html=True)

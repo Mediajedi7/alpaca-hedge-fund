@@ -1,6 +1,9 @@
 """Dashboard theme — blended palette (JARVIS dark + day-trader green/red), Google
-fonts, and CSS that hides Streamlit chrome. Colors come from config.dashboard.theme."""
+fonts, hidden chrome, plain big-number metrics, and a centered fixed bottom pill nav."""
 from __future__ import annotations
+
+import base64
+import pathlib
 
 from core.config import cfg
 
@@ -14,36 +17,73 @@ SANS = T.get("font_sans", "Plus Jakarta Sans")
 MONO = T.get("font_mono", "JetBrains Mono")
 
 
+def robot_data_uri() -> str | None:
+    for ext in ("png", "jpg", "jpeg", "webp"):
+        p = pathlib.Path(__file__).parent / "assets" / f"robot.{ext}"
+        if p.exists():
+            mime = "jpeg" if ext in ("jpg", "jpeg") else ext
+            return f"data:image/{mime};base64," + base64.b64encode(p.read_bytes()).decode()
+    return None
+
+
 def css() -> str:
     return f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap');
 #MainMenu, header, footer {{visibility: hidden;}}
 .stApp {{ background: {BG}; color: #e6e8ef; font-family: '{SANS}', sans-serif; }}
-.block-container {{ padding-top: 1.2rem; max-width: 1400px; }}
+.block-container {{ padding-top: 2rem; padding-bottom: 6rem; max-width: 1500px; }}
 h1,h2,h3,h4 {{ font-family: '{SANS}', sans-serif; font-weight: 800; color: #f3f5fb; }}
 .mono {{ font-family: '{MONO}', monospace; }}
+
+/* cover */
+.jarvis {{ font-size: 96px; font-weight: 800; letter-spacing: -.04em; color: #f7f9ff; line-height: .95; }}
+.subtitle {{ font-size: 12px; letter-spacing: .34em; text-transform: uppercase; color: {ACCENT};
+            font-weight: 600; margin: 6px 0 26px; }}
+.robot {{ height: 78vh; min-height: 560px; border-radius: 16px;
+         background-size: cover; background-position: center right;
+         -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 28%);
+         mask-image: linear-gradient(90deg, transparent 0%, #000 28%); }}
+.robot.fallback {{ background: radial-gradient(120% 90% at 78% 30%, {CARD2} 0%, {BG} 62%);
+                  -webkit-mask-image:none; mask-image:none; border:1px solid #1c2438;
+                  display:flex; align-items:center; justify-content:center; }}
+
+/* plain metrics grid (no boxes) */
+.mgrid {{ display: grid; grid-template-columns: repeat(5, 1fr); gap: 26px 10px; margin-top: 8px; }}
+.mgrid .mv {{ font-size: 34px; font-weight: 800; color: #f3f5fb; line-height: 1; }}
+.mgrid .ml {{ font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #7e879f; margin-top: 6px; }}
+
+/* cards (other pages) */
 .card {{ background: linear-gradient(135deg, {CARD1}, {CARD2}); border: 1px solid #232b40;
         border-radius: 14px; padding: 16px 18px; margin-bottom: 12px; }}
 .metric {{ background: linear-gradient(135deg, {CARD1}, {CARD2}); border: 1px solid #232b40;
           border-radius: 12px; padding: 12px 14px; text-align: center; }}
-.metric .v {{ font-size: 26px; font-weight: 800; font-family: '{MONO}', monospace; }}
+.metric .v {{ font-size: 24px; font-weight: 800; font-family: '{MONO}', monospace; }}
 .metric .l {{ font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #8a93ad; }}
 .long {{ color: {LONG}; }} .short {{ color: {SHORT}; }} .accent {{ color: {ACCENT}; }}
-.pill {{ display:inline-block; padding: 4px 10px; border-radius: 999px; font-size: 11px;
-        font-weight: 600; letter-spacing:.08em; }}
 .badge {{ border:1px solid #2a3450; border-radius:999px; padding:3px 10px; font-size:11px; color:#9aa4bf; }}
-.jarvis {{ font-size: 92px; font-weight: 800; letter-spacing: -.03em;
-          background: linear-gradient(90deg, #fff, {ACCENT}); -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent; line-height: 1; }}
-.subtitle {{ font-size: 11px; letter-spacing:.28em; text-transform: uppercase; color:#8a93ad; }}
-.stButton button {{ background: {CARD2}; color:#e6e8ef; border:1px solid #2a3450; border-radius:10px;
-                   font-weight:600; }}
-.stButton button:hover {{ border-color: {ACCENT}; color:#fff; }}
-div[data-testid="stHorizontalBlock"] .navactive button {{
-    background: linear-gradient(135deg, {ACCENT}, #4f46e5); border-color: {ACCENT}; color:#fff; }}
-.cover {{ background: radial-gradient(120% 120% at 80% 20%, {CARD2} 0%, {BG} 60%);
-         border-radius: 18px; padding: 40px; border:1px solid #232b40; }}
+.pill {{ display:inline-block; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:600; }}
+
+/* ask box + glowing button */
+.stTextInput input {{ background: {CARD1}; border:1px solid #2a3450; border-radius: 12px;
+                     color:#e6e8ef; padding: 14px 16px; font-size: 15px; }}
+.stButton > button[kind="primary"] {{ background: linear-gradient(135deg, {ACCENT}, #4f46e5);
+    border: none; border-radius: 999px; color:#fff; font-weight:700; letter-spacing:.1em;
+    padding: 8px 26px; box-shadow: 0 0 28px rgba(99,102,241,.55); }}
+.stButton > button {{ background:{CARD2}; color:#e6e8ef; border:1px solid #2a3450; border-radius:10px; font-weight:600; }}
+.stButton > button:hover {{ border-color:{ACCENT}; color:#fff; }}
+
+/* fixed bottom pill nav */
+.navbar {{ position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 1000;
+          display: flex; gap: 4px; padding: 7px; border-radius: 999px;
+          background: linear-gradient(135deg, {CARD1}, {CARD2}); border: 1px solid #232b40;
+          box-shadow: 0 8px 30px rgba(0,0,0,.5); }}
+.navbar a {{ text-decoration: none; color: #8a93ad; font-size: 12px; font-weight: 600;
+            letter-spacing: .08em; padding: 8px 16px; border-radius: 999px; white-space: nowrap; }}
+.navbar a .rn {{ color: #5b647e; margin-right: 6px; }}
+.navbar a:hover {{ color: #e6e8ef; }}
+.navbar a.active {{ background: linear-gradient(135deg, {ACCENT}, #4f46e5); color:#fff; }}
+.navbar a.active .rn {{ color: #c7caff; }}
 </style>
 """
 
@@ -54,3 +94,8 @@ def card(html: str) -> str:
 
 def metric(label: str, value) -> str:
     return f'<div class="metric"><div class="v">{value}</div><div class="l">{label}</div></div>'
+
+
+def metrics_grid(items: list[tuple[str, object]]) -> str:
+    cells = "".join(f'<div><div class="mv">{v}</div><div class="ml">{l}</div></div>' for l, v in items)
+    return f'<div class="mgrid">{cells}</div>'
