@@ -27,7 +27,8 @@ def _panel(tickers: list[str], field: str, lookback: int) -> pd.DataFrame:
 def returns(tickers: list[str], lookback: int) -> pd.DataFrame:
     # +1 row so pct_change yields `lookback` returns
     px = _panel(tickers, "adj_close", lookback + 1)
-    return px.pct_change().dropna(how="all")
+    rets = px.pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan)
+    return rets.dropna(how="all")
 
 
 def betas(tickers: list[str], lookback: int | None = None) -> dict[str, float]:

@@ -29,10 +29,23 @@ live/paper rule still applies — never touch live from here).
   (returns/beta-vs-SPY/ADV/vol/range), `construct` (expected-return map, candidate selection,
   `target_portfolio` table). Entry `run_portfolio.py --optimize-method mvo|conviction`. MVO
   non-convergence falls back to conviction (verified). Beta now computed (`inputs.betas`).
-- **NEXT: Layer 5 (Risk Management).** Spec `docs/BUILD_PLAN.md` §5. Barra factor model
-  implements the `CovarianceProvider.cov()` interface and feeds MVO. Absolute-veto pre-trade
-  checks + circuit breakers. Earnings 50% cut + all veto limits owned HERE (config `risk.*`).
-- Layers 6–7 not started.
+- **Layer 5 (Risk Management): COMPLETE & verified.** `risk/`: `factor_risk_model` (Barra
+  cross-sectional regression → factor returns/cov + specific var; predicted cov XFXᵀ+diag
+  implements `CovarianceProvider` and feeds MVO — integration verified), `pre_trade` (8-check
+  absolute veto; per-trade `veto()` for Layer 6 + holistic `screen_target()`; earnings 50%
+  cut applied HERE only; rejections logged to `veto_rejections`), `circuit_breakers`
+  (daily/weekly/drawdown/per-position on $ losses; kill-switch writes `HALT.lock`). Entry
+  `run_risk.py --report | --clear-halt | --record-nav | --check-breakers`. Fixed: earnings
+  double-cut (removed from Layer 4 conviction); returns sanitized (inf/NaN) for lstsq.
+- **NEXT: Layer 6 (Execution / Alpaca paper).** Spec `docs/BUILD_PLAN.md` §6. Keys in `.env`.
+  **This is where the intraday loop lives** that calls `circuit_breakers.evaluate()` with live
+  Alpaca NAV, and where `target_portfolio` is turned into orders through the per-trade veto.
+- Layer 7 not started.
+
+### Layer 5 notes
+- To use factor cov in MVO: `mvo_optimizer.optimize(cov_provider=FactorRiskModel().fit())`.
+  Default still HistoricalCovarianceProvider; wire factor-cov as the default in Layer 6 orchestration.
+- Circuit-breaker LOGIC is here; the intraday monitor LOOP (poll Alpaca NAV → evaluate) is Layer 6.
 
 ### Layer 4 notes
 - AUM for sizing: `config portfolio.aum` (1M paper; Layer 6 overrides from Alpaca).

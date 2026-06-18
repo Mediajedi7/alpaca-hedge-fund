@@ -9,7 +9,6 @@ import pandas as pd
 
 from core.config import cfg
 from core.log import get_logger
-from data.earnings_calendar import days_to_earnings
 from portfolio import construct, inputs
 
 log = get_logger("conviction")
@@ -47,13 +46,9 @@ def _book(names: list[str], target: float, scores: pd.DataFrame, caps: dict) -> 
     if not names:
         return {}
     ranked = sorted(names, key=lambda t: scores.loc[t, "score"], reverse=True)
-    mult = _conviction_mult(ranked)
-    raw = dict(mult)
-    blackout = int(cfg.get("risk.veto.earnings_blackout_days", 5))
-    for t in names:
-        dte = days_to_earnings(t)
-        if dte is not None and dte <= blackout:
-            raw[t] *= 0.5
+    raw = _conviction_mult(ranked)  # equal-weight base x conviction tilt
+    # NOTE: the earnings 50% size-cut is NOT applied here — it is owned by Layer 5
+    # (risk/pre_trade.py) and applied once at veto time (see config.yaml ownership note).
     return _cap_and_normalize(raw, target, caps)
 
 

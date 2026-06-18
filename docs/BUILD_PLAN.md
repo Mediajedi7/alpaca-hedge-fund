@@ -57,7 +57,7 @@ single-side sector ≤25%); fall back to conviction on non-convergence. **Convic
 ADV, half-size if earnings ≤5d, beta-adjust, sector-neutral. **Transaction costs**: commission
 0 + spread (5% of avg H-L range) + impact (0.10·√(size/ADV)·dailyVolBps), fed into MVO.
 
-## 5. Risk Management (ABSOLUTE VETO)
+## 5. Risk Management (ABSOLUTE VETO) — DONE
 **Barra factor model** (`risk/factor_risk_model.py`): daily cross-sectional regression on
 z-scored factor exposures → factor returns, factor cov, specific var; portfolio factor/specific
 var, MCTR (flag MCTR% > 1.5× weight%); feed predicted cov (XFXᵀ+diag) to Layer 4.
