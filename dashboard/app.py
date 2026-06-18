@@ -9,6 +9,7 @@ import sys
 # add the repo root so `core`, `reporting`, etc. import cleanly.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import calendar
 from datetime import date, datetime
 
 import numpy as np
@@ -472,55 +473,154 @@ def page_risk():
 
 
 # ---------------- PAGE IV: PERFORMANCE ----------------
-def page_performance():
-    st.markdown("## Performance")
-    m = metrics.summary()
-    for c, (lab, key) in zip(st.columns(5), [("NAV", "nav"), ("Total ret", "total_return"),
-                             ("Ann vol", "ann_vol"), ("Sharpe", "sharpe"), ("Max DD", "max_drawdown")]):
-        c.markdown(theme.metric(lab, m.get(key, "—")), unsafe_allow_html=True)
+RET_SCALE = [[0.0, theme.SHORT], [0.5, "#16203a"], [1.0, theme.LONG]]
 
+
+def _kpi(col, label, value, sub, color="#f3f5fb"):
+    col.markdown(f'<div class="kpi"><div class="l">{label}</div>'
+                 f'<div class="v" style="color:{color}">{value}</div><div class="s">{sub}</div></div>',
+                 unsafe_allow_html=True)
+
+
+def page_performance():
     eq = metrics.daily_nav()
+    # equity curve
+    st.markdown("**Equity curve (rebased to 100)**")
     if len(eq) > 1:
         reb = eq / eq.iloc[0] * 100
         spy = metrics.spy_rebased(eq.index[0].date())
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=reb.index, y=reb.values, name="Fund", line=dict(color=theme.ACCENT)))
+        fig.add_trace(go.Scatter(x=reb.index, y=reb.values, name="Portfolio",
+                                 line=dict(color=theme.ACCENT, width=3)))
         if not spy.empty:
-            fig.add_trace(go.Scatter(x=spy.index, y=spy.values, name="SPY", line=dict(color="#8a93ad")))
-        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", height=320,
-                          title="Equity vs SPY (rebased 100)")
+            fig.add_trace(go.Scatter(x=spy.index, y=spy.values, name="SPY",
+                                     line=dict(color="#aeb6cc", width=1.5, dash="dot")))
+        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                          height=340, margin=dict(l=10, r=10, t=10, b=10),
+                          legend=dict(x=0.99, y=0.99, xanchor="right"))
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Equity history accrues as the intraday monitor records NAV (just launched).")
 
-    a = attribution.daily_attribution()
-    if a:
-        bars = go.Figure(go.Bar(x=["Beta", "Sector", "Factor", "Alpha"],
-                                y=[a["beta"], a["sector"], a["factor"], a["alpha_residual"]],
-                                marker_color=[theme.ACCENT, "#6b7aa8", "#9aa4bf", theme.LONG]))
-        bars.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", height=280,
-                           title="Daily P&L attribution")
-        st.plotly_chart(bars, use_container_width=True)
+    # monthly returns heatmap | drawdown area
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**Monthly returns (%)**")
+        mr = metrics.monthly_returns()
+        ytd = metrics.summary().get("total_return", 0) or 0
+        cols, vals = [], []
+        if not mr.empty:
+            row = mr.iloc[-1]
+            for mo in row.index:
+                if pd.notna(row[mo]):
+                    cols.append(calendar.month_abbr[int(mo)]); vals.append(float(row[mo]))
+        cols.append("YTD"); vals.append(float(ytd))
+        hm = go.Figure(go.Heatmap(z=[vals], x=cols, y=["2026"], colorscale=RET_SCALE, zmid=0,
+                                  text=[[f"{v:+.1%}" for v in vals]], texttemplate="%{text}",
+                                  colorbar=dict(tickformat=".0%")))
+        hm.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", height=300,
+                         margin=dict(l=10, r=10, t=10, b=10))
+        st.plotly_chart(hm, use_container_width=True)
+    with c2:
+        st.markdown("**Drawdown (%)**")
+        dd, _ = metrics.drawdown()
+        if not dd.empty:
+            fig = go.Figure(go.Scatter(x=dd.index, y=dd.values * 100, fill="tozeroy",
+                                       line=dict(color=theme.SHORT), fillcolor="rgba(192,57,43,.35)"))
+            fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                              height=300, margin=dict(l=10, r=10, t=10, b=10))
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No drawdown history yet.")
 
+    # P&L attribution | rolling sharpe
+    c3, c4 = st.columns(2)
+    with c3:
+        st.markdown("**Daily P&L attribution (%)**")
+        a = attribution.daily_attribution()
+        if a:
+            bars = go.Figure(go.Bar(x=["Beta", "Sector", "Factor", "Alpha"],
+                                    y=[a["beta"] * 100, a["sector"] * 100, a["factor"] * 100, a["alpha_residual"] * 100],
+                                    marker_color=["#3b7fd1", theme.ACCENT, "#e0a106", theme.LONG],
+                                    text=[f"{a['beta']:+.2%}", f"{a['sector']:+.2%}", f"{a['factor']:+.2%}",
+                                          f"{a['alpha_residual']:+.2%}"], textposition="outside"))
+            bars.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                               height=300, margin=dict(l=10, r=10, t=10, b=10))
+            st.plotly_chart(bars, use_container_width=True)
+    with c4:
+        st.markdown("**Rolling 60-day Sharpe ratio**")
+        r = metrics.returns()
+        if len(r) >= 10:
+            win = min(60, len(r))
+            rs = r.rolling(win).apply(lambda x: x.mean() / x.std() * (252 ** 0.5) if x.std() else 0)
+            fig = go.Figure(go.Scatter(x=rs.index, y=rs.values, line=dict(color=theme.ACCENT)))
+            fig.add_hline(y=1.0, line_dash="dot", line_color="#8a93ad")
+            fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                              height=300, margin=dict(l=10, r=10, t=10, b=10))
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Needs ~60 days of returns.")
+
+    # sector-relative alpha | total card
     sra = attribution.sector_relative_alpha()
-    t = analytics.turnover(30)
-    wl = analytics.win_loss()
-    c1, c2, c3 = st.columns(3)
-    c1.markdown(theme.card(f"<b>Sector-relative alpha (90d)</b><br>Total: <span class='mono'>{sra['total_alpha']:+.2%}</span>"
-                           f"<br>Winners {sra['winners']} · Losers {sra['losers']}"), unsafe_allow_html=True)
-    c2.markdown(theme.card(f"<b>Turnover</b><br>30d {t['turnover']:.1%} · ann {t['annualized']:.1f}x"
-                           f"<br>budget {t['budget']}x ({t['vs_budget']:+.1f})"), unsafe_allow_html=True)
-    c3.markdown(theme.card(f"<b>Win/Loss</b><br>n={wl['n']} · win {wl['win_rate'] if wl['win_rate'] is not None else '—'}"
-                           f"<br>P/L ratio {wl['pl_ratio'] if wl['pl_ratio'] is not None else '—'}"), unsafe_allow_html=True)
+    c5, c6 = st.columns([68, 32])
+    with c5:
+        st.markdown("**Sector-relative performance — stock selection alpha (90d)**")
+        if sra["sectors"]:
+            s = pd.Series(sra["sectors"]).sort_values()
+            fig = go.Figure(go.Bar(x=s.values * 100, y=s.index, orientation="h",
+                                   marker_color=[theme.LONG if v > 0 else theme.SHORT for v in s.values],
+                                   text=[f"{v:+.2%}" for v in s.values], textposition="outside"))
+            fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                              height=420, margin=dict(l=10, r=10, t=10, b=30),
+                              xaxis_title="Contribution to book stock-selection alpha (%)")
+            st.plotly_chart(fig, use_container_width=True)
+    _kpi(c6, "Total stock-selection α (90d)", f"{sra['total_alpha']:+.2%}",
+         f"winners {sra['winners']} · losers {sra['losers']}", theme.LONG if sra['total_alpha'] >= 0 else theme.SHORT)
 
-    st.markdown("#### Weekly commentary")
-    if st.button("Generate weekly commentary (Claude)"):
+    # turnover cards
+    t = analytics.turnover(30)
+    tax = analytics.tax_estimate()
+    tk = st.columns(4)
+    _kpi(tk[0], "Turnover (30d)", f"{t['turnover']:.1%}", f"{analytics.roundtrips().__len__()} round-trips · ${t['notional']:,.0f} notional")
+    _kpi(tk[1], "Annualized turnover", f"{t['annualized']*100:.0f}%", "30d window × 12.17")
+    _kpi(tk[2], "Vs. budget", f"{t['annualized']*100:.0f}% / {t['budget']*100:.0f}%",
+         "annualized / budget", theme.LONG if t['vs_budget'] <= 0 else theme.SHORT)
+    _kpi(tk[3], "Est. tax (realized YTD)", f"${tax['est_tax']:,.0f}", "ST/LT realized gains")
+
+    # transaction-cost cards
+    tp = _q("SELECT ticker FROM target_portfolio WHERE asof_date=(SELECT MAX(asof_date) FROM target_portfolio)")
+    from execution import costs
+    from portfolio import transaction_costs
+    est = 0.0
+    if not tp.empty:
+        d = transaction_costs.estimate(list(tp.ticker))
+        est = sum(x["total_bps"] for x in d.values()) / max(len(d), 1)
+    slip = costs.slippage_stats()
+    ck = st.columns(3)
+    _kpi(ck[0], "Avg estimated cost", f"{est:.1f} bps", "MVO model: spread + sqrt impact")
+    _kpi(ck[1], "Avg actual slippage", f"{slip['avg_bps']:+.1f} bps", f"over {slip['n']} orders, last 30d",
+         theme.SHORT if slip['avg_bps'] > 0 else theme.LONG)
+    _kpi(ck[2], "Model error", f"{slip['avg_bps'] - est:+.1f} bps", "actual vs estimate")
+
+    # win/loss + weekly commentary
+    wl = analytics.win_loss()
+    if wl["n"] == 0:
+        st.markdown(theme.card("<div class='l'>WIN/LOSS ANALYSIS</div>"
+                               "Need closed round-trips before win-rate stats are meaningful."), unsafe_allow_html=True)
+    else:
+        st.markdown(theme.card(f"<div class='l'>WIN/LOSS ANALYSIS</div>n={wl['n']} · win rate "
+                               f"{wl['win_rate']:.0%} · P/L ratio {wl['pl_ratio']}"), unsafe_allow_html=True)
+
+    st.markdown("**Claude weekly commentary**")
+    if st.button("Generate weekly commentary"):
         with st.spinner("JARVIS writing…"):
-            st.markdown(theme.card(jarvis.weekly_commentary(regenerate=True).replace("\n", "<br>")), unsafe_allow_html=True)
+            txt = jarvis.weekly_commentary(regenerate=True)
+        st.markdown(theme.card(txt.replace("\n", "<br>")), unsafe_allow_html=True)
     else:
         cached = jarvis._one("SELECT content FROM jarvis_commentary ORDER BY created_at DESC LIMIT 1")
-        if cached:
-            st.markdown(theme.card(cached["content"].replace("\n", "<br>")), unsafe_allow_html=True)
+        st.markdown(theme.card(cached["content"].replace("\n", "<br>") if cached
+                               else "Click <b>Generate</b> for the JARVIS weekly commentary."), unsafe_allow_html=True)
 
 
 # ---------------- PAGE V: EXECUTION ----------------
