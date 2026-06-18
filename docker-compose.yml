@@ -1,0 +1,45 @@
+services:
+  # Scheduler + batch jobs (data refresh, scoring). supercronic holds the foreground.
+  fund:
+    build: .
+    image: alpaca-hedge-fund
+    container_name: meridian-fund
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TZ: America/New_York
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      # Mount project so state (SQLite, JSON) persists and NAS edits apply without rebuild
+      - .:/app
+    healthcheck:
+      test: ["CMD", "pgrep", "-x", "supercronic"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Interactive Streamlit dashboard — LAN-ONLY (JARVIS chat + Approve/Execute buttons).
+  # NOT a public site. Do NOT port-forward 8502 on the router.
+  # Start only after Layer 7 (dashboard/app.py) exists:  docker compose up -d dashboard
+  dashboard:
+    image: alpaca-hedge-fund
+    container_name: meridian-dashboard
+    restart: unless-stopped
+    depends_on:
+      - fund
+    env_file:
+      - .env
+    environment:
+      TZ: America/New_York
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - .:/app
+    command: >
+      streamlit run dashboard/app.py
+      --server.port 8502
+      --server.address 0.0.0.0
+      --server.headless true
+    ports:
+      - "8502:8502"

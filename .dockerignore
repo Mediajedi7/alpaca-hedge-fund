@@ -1,0 +1,19 @@
+# Never bake secrets into the image
+.env
+
+# Not needed in the image
+__pycache__/
+*.pyc
+.git/
+.gitignore
+.venv/
+*.log
+*.log.err
+.DS_Store
+README.md
+
+# Runtime data is volume-mounted, not shipped
+cache/
+output/
+*.db
+*.sqlite*

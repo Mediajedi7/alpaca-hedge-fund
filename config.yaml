@@ -1,0 +1,173 @@
+# =============================================================================
+# Meridian Capital Partners — master configuration
+# SINGLE SOURCE OF TRUTH for every tunable parameter and risk limit.
+# Every layer reads from here. Do not hardcode these values anywhere else.
+# =============================================================================
+
+fund:
+  name: "Meridian Capital Partners"
+  short_name: "Meridian"
+  domicile: "Delaware"
+  inception: "2026-06-17"
+  base_currency: "USD"
+  mode: "paper"            # paper | live  (live also requires the typed confirmation in execution/broker.py)
+
+# -----------------------------------------------------------------------------
+# LAYER 1 — Data Infrastructure
+# -----------------------------------------------------------------------------
+data:
+  db_path: "cache/meridian.db"
+  price_lookback_days: 1095        # ~3 years
+  universe_refresh_days: 7         # re-scrape S&P 500 weekly
+  fundamentals_provider: "fmp"     # fmp | yfinance  (fmp = Premium quarterly history)
+  fundamentals_fallback: "yfinance"
+
+  benchmarks: [SPY, QQQ, IWM, DIA]
+  sector_etfs: [XLK, XLF, XLV, XLE, XLI, XLC, XLY, XLP, XLB, XLRE, XLU]
+  macro_tickers: ["^VIX", TLT, HYG]
+  beta_benchmark: SPY              # beta computed vs this (shared by Layers 4/5/risk veto)
+
+  sec:
+    rate_limit_per_sec: 8          # SEC EDGAR fair-access limit
+    form4_lookback_days: 180
+    cluster_buy_window_days: 30
+    cluster_buy_min_insiders: 3
+  institutional:
+    funds: [Citadel, Point72, Bridgewater, "Tiger Global", "Third Point",
+            "Berkshire Hathaway", Appaloosa, Baupost, "Pershing Square"]
+    multi_fund_open_min: 3
+  earnings_calendar_horizon_days: 30
+
+# -----------------------------------------------------------------------------
+# LAYER 2 — Scoring Engine   (0-100 percentile rank WITHIN GICS sector)
+# Sub-factors equal-weighted within each parent; parents combined below.
+# -----------------------------------------------------------------------------
+factors:
+  # Composite weights across the 8 parent factors (must sum to 1.0)
+  weights:
+    momentum:      0.18
+    value:         0.16
+    quality:       0.18
+    growth:        0.14
+    revisions:     0.10
+    short_interest: 0.08
+    insider:       0.08
+    institutional: 0.08
+  revisions_min_snapshot_days: 30  # below this, revisions factor is degenerate (=50)
+  no_data_score: 50                # sector-median fallback when a factor has no data
+
+# -----------------------------------------------------------------------------
+# LAYER 3 — AI Analysis (Claude)
+# -----------------------------------------------------------------------------
+analysis:
+  model: "claude-sonnet-4-5"       # configurable; latest Sonnet recommended
+  prompt_caching: true
+  cost_ceiling_usd: 25.0           # hard ceiling per run; abort if exceeded
+  cache_ttl_days: 30
+  earnings_transcript_max_chars: 120000
+  risk_factors_max_chars: 80000
+  combine:                         # combined_score.py
+    quant_weight: 0.60
+    claude_weight: 0.40            # avg of available analyzers; 100% quant if none, no penalty
+
+# -----------------------------------------------------------------------------
+# LAYER 4 — Portfolio Construction
+# -----------------------------------------------------------------------------
+portfolio:
+  optimize_method: "conviction"    # mvo | conviction  (--optimize-method overrides)
+  expected_return:                 # composite score -> annualized expected return (linear)
+    score_100_return: 0.15
+    score_0_return:  -0.15
+  mvo:
+    risk_aversion_lambda: 1.0
+    cov_lookback_days: 120         # historical cov until Layer 5 factor-cov is wired in
+    portfolio_beta_cap: 0.15       # optimizer TARGET: |sum(w*beta)| <= this  (tighter than veto 0.20)
+    sector_net_max: 0.05           # |sector net| <= 5%
+    sector_single_side_max: 0.25   # one book's sector weight <= 25%
+  conviction:
+    top_5pct_multiplier: 1.50
+    top_10pct_multiplier: 1.25
+  # Exposure targets — chosen so optimizer output can PASS the Layer 5 veto:
+  #   long+short gross <= 165%, net in [-10%, +15%]
+  target_long_gross: 0.85
+  target_short_gross: 0.80         # => 165% gross, +5% net
+  position_min_pct: 0.005
+  position_max_pct: 0.05           # matches veto position cap (5% AUM)
+  max_position_pct_adv: 0.05       # liquidity: no position > 5% of 20-day ADV
+
+# -----------------------------------------------------------------------------
+# LAYER 4/6 — Transaction Cost Model
+# -----------------------------------------------------------------------------
+transaction_costs:
+  commission_bps: 0.0              # Alpaca
+  spread_pct_of_range: 0.05        # 5% of avg daily high-low range
+  market_impact_coef: 0.10         # coef * sqrt(trade_size/ADV) * daily_vol_bps
+
+# -----------------------------------------------------------------------------
+# LAYER 5 — Risk Management   (ABSOLUTE VETO — no override)
+# OWNERSHIP: the earnings size-cut and all veto limits live HERE and are applied
+# ONCE by risk/pre_trade.py. Optimizers (Layer 4) must NOT also apply the cut.
+# -----------------------------------------------------------------------------
+risk:
+  factor_model:
+    lookback_days: 120
+    mctr_flag_multiple: 1.5        # flag stock where MCTR% > 1.5x weight%
+    factor_exposure_sigma_warn: 1.5
+  veto:
+    earnings_blackout_days: 5
+    earnings_size_cut: 0.50        # 50% size cut inside blackout (applied here, ONCE)
+    liquidity_max_pct_adv: 0.05
+    position_max_pct_aum: 0.05
+    sector_max_pct: 0.25
+    gross_max: 1.65
+    net_min: -0.10
+    net_max:  0.15
+    net_beta_max: 0.20             # veto rejects beyond this (looser than optimizer target 0.15)
+    max_pairwise_correlation: 0.80
+  circuit_breakers:                # fire on ACTUAL dollar losses
+    daily_loss_size_down:   {threshold: 0.015, action: SIZE_DOWN, size_pct: 0.30}
+    daily_loss_close_all:   {threshold: 0.025, action: CLOSE_ALL_TODAY}
+    weekly_loss_size_down:  {threshold: 0.040, action: SIZE_DOWN, size_pct: 0.30}
+    drawdown_kill_switch:   {threshold: 0.080, action: KILL_SWITCH}
+    single_position_nav_loss: {threshold: 0.030, action: FORCE_CLOSE}
+  halt_lock_file: "cache/HALT.lock"
+
+# -----------------------------------------------------------------------------
+# LAYER 6 — Execution (Alpaca paper)
+# -----------------------------------------------------------------------------
+execution:
+  limit_offset: 0.001              # close * (1 +/- 0.001)
+  chunk_threshold_pct_adv: 0.02    # chunk orders larger than 2% ADV
+  time_in_force_secs: 120
+  poll_interval_secs: 5
+  max_retries: 3
+  short_check_cache_days: 7
+  slippage_window_days: 30
+
+# -----------------------------------------------------------------------------
+# LAYER 7 — Reporting + Dashboard
+# -----------------------------------------------------------------------------
+reporting:
+  weekly_commentary_weekday: "Friday"
+  tax:
+    short_term_rate: 0.37
+    long_term_rate: 0.20
+  turnover_budget_annual: 4.0      # vs which trailing turnover is compared
+
+dashboard:
+  port: 8502
+  refresh_secs: 300                # auto-refresh every 5 min during market hours
+  market_open: "09:30"
+  market_close: "16:00"
+  timezone: "America/New_York"
+  theme:
+    background: "#0b0e17"
+    card_gradient: ["#131827", "#1a2035"]
+    accent: "#6366f1"
+    long: "#10b981"
+    short: "#f43f5e"
+
+schedule:
+  # Daily scoring runs in-container via supercronic (replaces the macOS launchd plist).
+  # Weekdays 17:15 America/New_York -> run_scoring.py --no-filings --no-13f
+  daily_scoring_cron: "15 17 * * 1-5"

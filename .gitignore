@@ -1,0 +1,22 @@
+# Secrets — never commit
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.mypy_cache/
+.pytest_cache/
+
+# Local data / runtime state (volume-mounted on the NAS, not versioned)
+cache/
+output/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.log.err
+
+# OS
+.DS_Store
