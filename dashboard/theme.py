@@ -91,9 +91,9 @@ h1,h2,h3,h4 {{ font-family: '{SANS}', sans-serif; font-weight: 800; color: #f3f5
 /* ask box + glowing button */
 .stTextInput input {{ background: {CARD1}; border:1px solid #2a3450; border-radius: 12px;
                      color:#e6e8ef; padding: 14px 16px; font-size: 15px; }}
-.stButton > button[kind="primary"] {{ background: linear-gradient(135deg, {ACCENT}, #4f46e5);
+.stButton > button[kind="primary"] {{ background: linear-gradient(135deg, {ACCENT}, #4fa800);
     border: none; border-radius: 999px; color:#fff; font-weight:700; letter-spacing:.1em;
-    padding: 8px 26px; box-shadow: 0 0 28px rgba(99,102,241,.55); }}
+    padding: 8px 26px; box-shadow: 0 0 28px rgba(109,242,0,.5); }}
 .stButton > button {{ background:{CARD2}; color:#e6e8ef; border:1px solid #2a3450; border-radius:10px; font-weight:600; }}
 .stButton > button:hover {{ border-color:{ACCENT}; color:#fff; }}
 
@@ -106,8 +106,8 @@ h1,h2,h3,h4 {{ font-family: '{SANS}', sans-serif; font-weight: 800; color: #f3f5
             letter-spacing: .08em; padding: 8px 16px; border-radius: 999px; white-space: nowrap; }}
 .navbar a .rn {{ color: #5b647e; margin-right: 6px; }}
 .navbar a:hover {{ color: #e6e8ef; }}
-.navbar a.active {{ background: linear-gradient(135deg, {ACCENT}, #4f46e5); color:#fff; }}
-.navbar a.active .rn {{ color: #c7caff; }}
+.navbar a.active {{ background: linear-gradient(135deg, {ACCENT}, #4fa800); color:#fff; }}
+.navbar a.active .rn {{ color: #dffbc0; }}
 </style>
 """
 

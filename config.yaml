@@ -180,7 +180,7 @@ dashboard:
   theme:                           # blended: JARVIS dark + day-trader green/red
     background: "#0b0e17"
     card_gradient: ["#131827", "#1a2035"]
-    accent: "#6366f1"
+    accent: "#6df200"
     long: "#27ae60"                # day-trader gains green
     short: "#c0392b"               # day-trader losses red
     font_sans: "Plus Jakarta Sans"

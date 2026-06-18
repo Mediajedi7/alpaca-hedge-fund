@@ -2,7 +2,7 @@
 # to match the custom CSS. Without this, st.dataframe shows a white grid.
 [theme]
 base = "dark"
-primaryColor = "#6366f1"
+primaryColor = "#6df200"
 backgroundColor = "#0b0e17"
 secondaryBackgroundColor = "#131827"
 textColor = "#e6e8ef"
