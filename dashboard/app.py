@@ -2,6 +2,13 @@
 6 pages: Portfolio cover, Research, Risk, Performance, Execution, LP Letter."""
 from __future__ import annotations
 
+import os
+import sys
+
+# `streamlit run dashboard/app.py` puts dashboard/ on sys.path, not the repo root —
+# add the repo root so `core`, `reporting`, etc. import cleanly.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from datetime import date, datetime
 
 import pandas as pd

@@ -34,6 +34,7 @@ services:
     environment:
       TZ: America/New_York
       PYTHONUNBUFFERED: "1"
+      PYTHONPATH: /app
     volumes:
       - .:/app
     command: >
