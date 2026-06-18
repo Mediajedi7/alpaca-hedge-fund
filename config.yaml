@@ -33,8 +33,17 @@ data:
     cluster_buy_window_days: 30
     cluster_buy_min_insiders: 3
   institutional:
-    funds: [Citadel, Point72, Bridgewater, "Tiger Global", "Third Point",
-            "Berkshire Hathaway", Appaloosa, Baupost, "Pershing Square"]
+    # 13-F filer CIKs (verified against EDGAR submissions API)
+    fund_ciks:
+      Citadel: 1423053
+      Point72: 1603466
+      Bridgewater: 1350694
+      "Tiger Global": 1167483
+      "Third Point": 1040273
+      "Berkshire Hathaway": 1067983
+      Appaloosa: 1006438
+      Baupost: 1061768
+      "Pershing Square": 1336528
     multi_fund_open_min: 3
   earnings_calendar_horizon_days: 30
 

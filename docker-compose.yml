@@ -3,7 +3,7 @@ services:
   fund:
     build: .
     image: alpaca-hedge-fund
-    container_name: meridian-fund
+    container_name: alpaca-hedge-fund
     restart: unless-stopped
     env_file:
       - .env
@@ -25,7 +25,7 @@ services:
   # Start only after Layer 7 (dashboard/app.py) exists:  docker compose up -d dashboard
   dashboard:
     image: alpaca-hedge-fund
-    container_name: meridian-dashboard
+    container_name: alpaca-hedge-fund-dashboard
     restart: unless-stopped
     depends_on:
       - fund

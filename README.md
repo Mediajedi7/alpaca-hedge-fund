@@ -26,7 +26,7 @@ All tunables and risk limits live in **`config.yaml`** (single source of truth).
 
 ## Deployment (NAS container)
 - NAS dir: `/volume2/Docker/AlpacaHedgeFund` → mounted `/app`
-- Container: `meridian-fund` (supercronic cron) + `meridian-dashboard` (Streamlit, LAN-only :8502)
+- Container: `alpaca-hedge-fund` (supercronic cron) + `alpaca-hedge-fund-dashboard` (Streamlit, LAN-only :8502)
 - Daily scoring: weekdays 17:15 ET via supercronic (`crontab`)
 - Helper: `./nas.sh "<cmd>"`
 
