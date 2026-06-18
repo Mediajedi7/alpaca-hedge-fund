@@ -16,11 +16,10 @@ Add the printed `AUTH_USER` / `AUTH_PASSWORD_HASH` / `AUTH_TOTP_SECRET` to
 ```
 Confirm the login screen appears on the LAN (http://10.0.1.6:8502) before continuing.
 
-## 2. DNS — add the A record (Microsoft 365 DNS manager)
-- Host: `jarvis`  ·  Type: `A`  ·  Value: `47.197.216.50`  ·  TTL: low (e.g. 5 min)
-- ⚠️ Residential IPs can change. If it does, this record must be updated. Options:
-  set a low TTL and update manually, ask your ISP for a static IP, or use a DDNS
-  service that can update Microsoft DNS. (A Cloudflare Tunnel would avoid this entirely.)
+## 2. DNS — add a CNAME to the DDNS record (Microsoft 365 DNS manager)
+- Host: `jarvis`  ·  Type: `CNAME`  ·  Value: `mediajedi.webhop.net`  ·  TTL: low (e.g. 5 min)
+- This points at the NAS-maintained DDNS name (which already tracks the home public IP),
+  so a changing residential IP is handled automatically — no manual A-record updates.
 
 ## 3. Router — port forward to the Synology (10.0.1.6)
 - TCP `443` → 10.0.1.6:443  (HTTPS)
