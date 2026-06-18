@@ -37,10 +37,21 @@ live/paper rule still applies — never touch live from here).
   (daily/weekly/drawdown/per-position on $ losses; kill-switch writes `HALT.lock`). Entry
   `run_risk.py --report | --clear-halt | --record-nav | --check-breakers`. Fixed: earnings
   double-cut (removed from Layer 4 conviction); returns sanitized (inf/NaN) for lstsq.
-- **NEXT: Layer 6 (Execution / Alpaca paper).** Spec `docs/BUILD_PLAN.md` §6. Keys in `.env`.
-  **This is where the intraday loop lives** that calls `circuit_breakers.evaluate()` with live
-  Alpaca NAV, and where `target_portfolio` is turned into orders through the per-trade veto.
-- Layer 7 not started.
+- **Layer 6 (Execution / Alpaca paper): COMPLETE & LIVE-VERIFIED.** `execution/`: `broker`
+  (alpaca-py, paper=True hardcoded; live needs config mode:live + typed confirmation; backoff),
+  `executor` (target -> trades; holistic veto; limit close*(1±0.001); chunk >2% ADV; submit/
+  poll 5s/120s TIF/cancel+retry 3x; signal_price slippage), `short_check` (7d cache),
+  `costs` (slippage tracker, 30d stats, worst-5), `order_manager` (states + SIGINT cancel-pending),
+  `monitor` (intraday circuit-breaker pass). Entry `run_execution.py --dry-run|--execute [--max-orders N]`.
+  Live test: bought 1 AMD, filled −16bps, slippage logged, position tracked. Paper account
+  has 1 AMD share from that test.
+- **Intraday monitoring decision:** the circuit-breaker monitor runs as a **supercronic cron
+  pass every 5 min during market hours** (not an always-on watchdog) — see `crontab`. It is
+  PROTECTIVE ONLY (size-down/close-all/kill-switch/force-close); it never opens positions.
+  Activates on next container restart (supercronic reads crontab at start).
+- **NEXT: Layer 7 (Reporting + Dashboard).** Spec `docs/BUILD_PLAN.md` §7. Streamlit on :8502
+  (LAN-only — start the `dashboard` compose service), JARVIS persona, 6 pages, reports/LP letter.
+- Portfolio execution stays MANUAL (human-in-the-loop via dashboard / run_execution.py).
 
 ### Layer 5 notes
 - To use factor cov in MVO: `mvo_optimizer.optimize(cov_provider=FactorRiskModel().fit())`.

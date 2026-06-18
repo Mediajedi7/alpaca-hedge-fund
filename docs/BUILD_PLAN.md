@@ -68,7 +68,7 @@ pairwise corr ≤0.80. **Circuit breakers** (on $ losses): daily >1.5%→size-do
 daily >2.5%→close-all-today, weekly >4%→size-down 30%, drawdown >8%→kill-switch (lock file,
 `--clear-halt`), single position >3% NAV→force-close.
 
-## 6. Execution (Alpaca paper)
+## 6. Execution (Alpaca paper) — DONE
 `execution/broker.py`: alpaca-py, **hardcode paper base URL**; live requires `mode: live`
 AND typed "YES I UNDERSTAND THE RISKS"; sync state on startup; backoff. `executor.py`:
 per trade → veto → short-availability → limit `close·(1±0.001)` → chunk >2% ADV → 120s TIF →

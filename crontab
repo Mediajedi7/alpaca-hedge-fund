@@ -4,3 +4,8 @@
 # Daily scoring: weekdays 17:15 ET. Refreshes prices, short interest, analyst
 # estimates, earnings calendar, then re-scores all factors (~10-40 min).
 15 17 * * 1-5 cd /app && python3 run_scoring.py --no-filings --no-13f >> /app/output/logs/scoring.log 2>&1
+#
+# Intraday risk monitor: every 5 min during market hours (ET). Records NAV and fires
+# circuit breakers (size-down/close-all/kill-switch/force-close). PROTECTIVE ONLY —
+# it never opens new positions; portfolio execution stays manual (run_execution.py).
+*/5 9-16 * * 1-5 cd /app && python3 -m execution.monitor >> /app/output/logs/monitor.log 2>&1
