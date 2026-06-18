@@ -1,4 +1,4 @@
-# Meridian Capital Partners — Python dependencies (container: python:3.11-slim)
+# Mediajedi Hedge Fund — Python dependencies (container: python:3.11-slim)
 
 # --- Core / config ---
 python-dotenv==1.0.1

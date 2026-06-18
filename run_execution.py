@@ -18,7 +18,7 @@ log = get_logger("run_execution")
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Meridian Layer 6 execution")
+    ap = argparse.ArgumentParser(description="Mediajedi Layer 6 execution")
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--dry-run", action="store_true")
     g.add_argument("--execute", action="store_true")

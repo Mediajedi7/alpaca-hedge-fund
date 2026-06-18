@@ -1,5 +1,5 @@
 """JARVIS — the fund's AI persona. Builds a system-state snapshot (cached as Claude
-context), answers chat questions, and authors the daily LP letter + weekly commentary."""
+context), answers chat questions, and authors the daily investors letter + weekly commentary."""
 from __future__ import annotations
 
 import json
@@ -14,7 +14,7 @@ from core.log import get_logger
 log = get_logger("jarvis")
 
 PERSONA = (
-    "You are JARVIS, the AI analyst for Meridian Capital Partners, a long/short equity "
+    "You are JARVIS, the AI analyst for Mediajedi Hedge Fund, a long/short equity "
     "hedge fund. You are precise, measured, and quietly confident — an institutional voice, "
     "never hype. You ground every statement in the provided system snapshot. When you lack "
     "data, say so plainly. Numbers are sector-percentile scores (0-100) unless noted."
@@ -111,8 +111,8 @@ def lp_letter(for_date: str | None = None, regenerate: bool = False) -> str:
     snap = json.dumps(snapshot(), default=str)
     sys = PERSONA + "\n\nSNAPSHOT:\n" + snap
     user = (
-        "Write today's daily Limited Partner letter as 3-4 short paragraphs. Open with "
-        "'Dear Limited Partners,'. Cover: portfolio posture (long/short, gross/net), the "
+        "Write today's Daily Investors' Letter as 3-4 short paragraphs. Open with "
+        "'Dear Investors,'. Cover: portfolio posture (long/short, gross/net), the "
         "day's notable positioning and any risk flags, and a measured outlook. Institutional, "
         "calm, specific. Do NOT include letterhead or signature — the document frame adds those."
     )

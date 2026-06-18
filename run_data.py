@@ -53,7 +53,7 @@ def refresh(no_filings: bool = False, no_13f: bool = False, forms: list[str] | N
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Meridian Layer 1 data refresh")
+    ap = argparse.ArgumentParser(description="Mediajedi Layer 1 data refresh")
     ap.add_argument("--no-filings", action="store_true", help="skip SEC 10-K/10-Q/8-K + Form 4")
     ap.add_argument("--no-13f", action="store_true", help="skip 13-F institutional holdings")
     ap.add_argument("--forms", nargs="+", default=None, help="restrict SEC filings to these forms")

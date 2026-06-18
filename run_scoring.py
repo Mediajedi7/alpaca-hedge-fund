@@ -19,7 +19,7 @@ log = get_logger("run_scoring")
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Meridian Layer 2 scoring")
+    ap = argparse.ArgumentParser(description="Mediajedi Layer 2 scoring")
     ap.add_argument("--no-filings", action="store_true")
     ap.add_argument("--no-13f", action="store_true")
     ap.add_argument("--forms", nargs="+", default=None)

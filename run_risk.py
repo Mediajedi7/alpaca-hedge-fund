@@ -52,7 +52,7 @@ def _report() -> None:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Meridian Layer 5 risk management")
+    ap = argparse.ArgumentParser(description="Mediajedi Layer 5 risk management")
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--clear-halt", action="store_true")
     ap.add_argument("--record-nav", type=float, default=None)

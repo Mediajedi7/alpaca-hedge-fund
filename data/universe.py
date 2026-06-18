@@ -16,7 +16,7 @@ from core.log import get_logger
 log = get_logger("universe")
 
 WIKI_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-_UA = {"User-Agent": "Mozilla/5.0 (MeridianCapital research bot)"}
+_UA = {"User-Agent": "Mozilla/5.0 (MediajediHedgeFund research bot)"}
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS universe (

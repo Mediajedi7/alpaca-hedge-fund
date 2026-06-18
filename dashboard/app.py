@@ -1,5 +1,5 @@
-"""Meridian Capital Partners — JARVIS dashboard (Streamlit, LAN-only :8502).
-6 pages: Portfolio cover, Research, Risk, Performance, Execution, LP Letter."""
+"""Mediajedi Hedge Fund — JARVIS dashboard (Streamlit, LAN-only :8502).
+6 pages: Portfolio cover, Research, Risk, Performance, Execution, Investors Letter."""
 from __future__ import annotations
 
 import os
@@ -23,7 +23,7 @@ from core.db import get_conn
 from dashboard import theme
 from reporting import analytics, attribution, jarvis, metrics
 
-st.set_page_config(page_title="JARVIS — Meridian Capital", layout="wide", page_icon="◆")
+st.set_page_config(page_title="JARVIS — Mediajedi Hedge Fund", layout="wide", page_icon="◆")
 st.markdown(theme.css(), unsafe_allow_html=True)
 
 NAV = [("I", "PORTFOLIO"), ("II", "RESEARCH"), ("III", "RISK"),
@@ -688,8 +688,8 @@ def page_execution():
 
 # ---------------- PAGE VI: LETTER ----------------
 def page_letter():
-    st.markdown("## Limited Partner Letter")
-    doc_id = f"MCP-IM-{date.today():%Y-%m%d}"
+    st.markdown("## Daily Investors' Letter")
+    doc_id = f"MHF-IM-{date.today():%Y-%m%d}"
     aum = "—"
     try:
         from execution.broker import Broker
@@ -703,14 +703,14 @@ def page_letter():
             f"<span class='badge'>AUM: {aum}</span></div>"
             f"<div style='text-align:right'><span class='badge'>{doc_id}</span><br>"
             f"<span class='badge'>{date.today():%Y-%m-%d}</span></div></div>"
-            f"<div class='pill' style='background:{theme.SHORT};margin-top:8px'>CONFIDENTIAL • LIMITED PARTNERS ONLY</div></div>")
+            f"<div class='pill' style='background:{theme.SHORT};margin-top:8px'>CONFIDENTIAL • INVESTORS ONLY</div></div>")
     st.markdown(head, unsafe_allow_html=True)
 
     regen = st.button("Regenerate letter")
     with st.spinner("JARVIS composing…" if regen else "Loading…"):
         body = jarvis.lp_letter(regenerate=regen)
-    st.markdown(theme.card("Dear Limited Partners,<br><br>" + body.replace("Dear Limited Partners,", "").strip().replace("\n", "<br>")
-                           + "<br><br>—<br><b>JARVIS</b><br><span class='badge'>Meridian Capital Partners</span>"
+    st.markdown(theme.card("Dear Investors,<br><br>" + body.replace("Dear Investors,", "").replace("Dear Limited Partners,", "").strip().replace("\n", "<br>")
+                           + "<br><br>—<br><b>JARVIS</b><br><span class='badge'>Mediajedi Hedge Fund</span>"
                            + "<br><br><span class='badge'>This letter is for informational purposes only and does not "
                              "constitute investment advice or an offer to sell securities. Past performance is not "
                              "indicative of future results. Paper-trading simulation.</span>"), unsafe_allow_html=True)

@@ -19,7 +19,7 @@ log = get_logger("run_portfolio")
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Meridian Layer 4 portfolio construction")
+    ap = argparse.ArgumentParser(description="Mediajedi Layer 4 portfolio construction")
     ap.add_argument("--optimize-method", choices=["mvo", "conviction"],
                     default=cfg.get("portfolio.optimize_method", "conviction"))
     ap.add_argument("--n", type=int, default=None, help="candidates per side")

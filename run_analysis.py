@@ -87,7 +87,7 @@ def _estimate_cost() -> None:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Meridian Layer 3 AI analysis")
+    ap = argparse.ArgumentParser(description="Mediajedi Layer 3 AI analysis")
     ap.add_argument("--estimate-cost", action="store_true")
     ap.add_argument("--ticker", default=None)
     ap.add_argument("--sector", default=None)

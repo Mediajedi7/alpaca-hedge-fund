@@ -1,12 +1,12 @@
 # =============================================================================
-# Meridian Capital Partners — master configuration
+# Mediajedi Hedge Fund — master configuration
 # SINGLE SOURCE OF TRUTH for every tunable parameter and risk limit.
 # Every layer reads from here. Do not hardcode these values anywhere else.
 # =============================================================================
 
 fund:
-  name: "Meridian Capital Partners"
-  short_name: "Meridian"
+  name: "Mediajedi Hedge Fund"
+  short_name: "Mediajedi"
   domicile: "Delaware"
   inception: "2026-06-17"
   base_currency: "USD"
