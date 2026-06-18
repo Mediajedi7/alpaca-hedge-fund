@@ -15,6 +15,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from analysis import cache
 from core.config import cfg
 from core.db import get_conn
 from dashboard import theme
@@ -93,55 +94,177 @@ def page_portfolio():
 
 
 # ---------------- PAGE II: RESEARCH ----------------
+FACS = ["momentum", "value", "quality", "growth", "revisions", "short_interest", "insider", "institutional"]
+FAC_LABELS = ["Momentum", "Value", "Quality", "Growth", "Revisions", "Short Interest", "Insider", "Institutional"]
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _target_for(method: str, asof: str):
+    from portfolio import mvo_optimizer, optimizer as conv
+    if method == "mvo":
+        w, b, s, _ = mvo_optimizer.optimize()
+    else:
+        w, b, s = conv.construct_portfolio()
+    sectors = {t: s.loc[t, "sector"] for t in w if t in s.index}
+    return w, b, sectors
+
+
+def _last_closes(tickers):
+    if not tickers:
+        return {}
+    qs = ",".join("?" * len(tickers))
+    df = _q(f"SELECT ticker, MAX(date) d, close FROM daily_prices WHERE ticker IN ({qs}) GROUP BY ticker", tickers)
+    return dict(zip(df["ticker"], df["close"]))
+
+
+def _render_analysis(t, cl):
+    from analysis.base import AnalysisContext
+    from run_analysis import analyze_ticker
+    if not cl:
+        if st.button("Analyze with Claude", key=f"an_{t}"):
+            with st.spinner("Claude analyzing…"):
+                analyze_ticker(AnalysisContext.create(), t)
+            st.rerun()
+        return
+    f, r, ins = cl.get("filing"), cl.get("risk"), cl.get("insider")
+    if f:
+        st.markdown(f'<div class="an-h">Forensic financial — health {f.get("balance_sheet_score","?")}/10</div>',
+                    unsafe_allow_html=True)
+        st.write(f.get("one_line_summary", ""))
+        if f.get("red_flags"):
+            st.caption("Red flags: " + "; ".join(f["red_flags"][:3]))
+    if r:
+        st.markdown(f'<div class="an-h">10-K risk factors — severity {r.get("risk_severity","?")}</div>',
+                    unsafe_allow_html=True)
+        st.write(r.get("one_line_summary", ""))
+    if ins:
+        st.markdown(f'<div class="an-h">Insider activity — {ins.get("signal_strength","?")} '
+                    f'(conf {ins.get("confidence","?")})</div>', unsafe_allow_html=True)
+        st.write(ins.get("one_line_summary", ""))
+    if st.button("Re-run Claude analysis", key=f"rr_{t}"):
+        with get_conn() as conn:
+            conn.execute("DELETE FROM analysis_results WHERE ticker=?", (t,))
+        with st.spinner("Re-running…"):
+            analyze_ticker(AnalysisContext.create(), t)
+        st.rerun()
+
+
+def _candidate(t, w, b, sc, prices, aum, decisions):
+    weight, beta, price = w[t], b.get(t, 1.0), prices.get(t)
+    shares = round(weight * aum / price) if price else 0
+    notional = abs(shares * (price or 0))
+    comp = sc.loc[t, "composite"] if t in sc.index else 0
+    pio = sc.loc[t, "piotroski"] if t in sc.index else None
+    alt = sc.loc[t, "altman_z"] if t in sc.index else None
+    sector = sc.loc[t, "sector"] if t in sc.index else "?"
+    zone = "safe" if (alt or 0) > 2.99 else "grey zone" if (alt or 0) >= 1.81 else "distress"
+    col = theme.LONG if weight > 0 else theme.SHORT
+    st.markdown(
+        f'<div class="cand"><span class="sc" style="color:{col}">{comp:.0f}</span>'
+        f'<span class="tkr">{t}</span> <span class="badge">{sector}</span>'
+        f'<div class="meta">{abs(shares)} sh · ${notional:,.0f} · {abs(weight):.1%} · β {beta:.2f}</div>'
+        f'<div class="fund">Piotroski {int(pio) if pio is not None else "—"}/9 · '
+        f'<span class="amber">Altman-Z {alt:.1f}</span> · {zone}</div></div>'
+        if alt is not None else
+        f'<div class="cand"><span class="sc" style="color:{col}">{comp:.0f}</span>'
+        f'<span class="tkr">{t}</span> <span class="badge">{sector}</span></div>',
+        unsafe_allow_html=True)
+    a, rj, rs = st.columns(3)
+    if a.button("Approve", key=f"ap_{t}", type="primary", use_container_width=True):
+        decisions[t] = "approved"
+    if rj.button("Reject", key=f"rj_{t}", use_container_width=True):
+        decisions[t] = "rejected"
+    if rs.button("Reset", key=f"rs_{t}", use_container_width=True):
+        decisions.pop(t, None)
+    if t in decisions:
+        st.caption(f"→ {decisions[t].upper()}")
+    cl = cache.all_for_ticker(t)
+    with st.expander(f"{t} — Claude analysis" if cl else f"{t} — analyze with Claude"):
+        _render_analysis(t, cl)
+
+
 def page_research():
     asof = _asof()
-    st.markdown("## Research")
-    method = st.radio("Optimization", ["conviction", "mvo"], horizontal=True)
+    decisions = st.session_state.setdefault("decisions", {})
+    method = "mvo"  # set after we read the radio below; placeholder for KPI cost calc
 
-    top = _q("SELECT ticker,sector,composite,momentum,value,quality,growth,revisions,"
-             "short_interest,insider,institutional FROM scores WHERE asof_date=? ORDER BY composite DESC LIMIT 30", (asof,))
-    bot = _q("SELECT ticker,sector,composite,momentum,value,quality,growth,revisions,"
-             "short_interest,insider,institutional FROM scores WHERE asof_date=? ORDER BY composite ASC LIMIT 30", (asof,))
+    # --- KPI cards ---
+    m = jarvis.metrics()
+    fdf = _q(f"SELECT {','.join(FACS)} FROM scores WHERE asof_date=?", (asof,))
+    disp = fdf.std().sort_values(ascending=False)
+    corr = fdf.corr().abs()
+    pairs = int(((corr.values > 0.85).sum() - len(FACS)) // 2)
+    sectors = int(_q("SELECT COUNT(DISTINCT sector) c FROM universe").iloc[0]["c"])
+    kpis = [("Universe size", m["universe"], f"{sectors} sectors", "#f3f5fb"),
+            ("Long candidates", m["long_candidates"], "top quintile per sector", theme.LONG),
+            ("Short candidates", m["short_candidates"], "bottom quintile per sector", theme.SHORT),
+            ("Highest-dispersion factor", FAC_LABELS[FACS.index(disp.index[0])], f"σ {disp.iloc[0]:.1f}", theme.ACCENT),
+            ("Crowding warnings", pairs, "factor pairs flagged", theme.LONG if pairs == 0 else theme.SHORT)]
+    for c, (l, v, s, col) in zip(st.columns(5), kpis):
+        c.markdown(f'<div class="kpi"><div class="l">{l}</div>'
+                   f'<div class="v" style="color:{col}">{v}</div><div class="s">{s}</div></div>',
+                   unsafe_allow_html=True)
+
+    # --- optimizer toggle ---
+    st.write("")
+    o1, o2, o3 = st.columns([34, 33, 33])
+    with o1:
+        st.markdown('<div class="l" style="color:#7e879f;letter-spacing:.12em">PORTFOLIO OPTIMIZER</div>',
+                    unsafe_allow_html=True)
+        method = st.radio("opt", ["mvo", "conviction"], horizontal=True, label_visibility="collapsed")
+        st.caption("MVO: Markowitz, factor-cov, net-of-cost. Conviction: top-N equal-weight + tilts.")
+    w, b, sectors_map = _target_for(method, asof)
+    from portfolio import transaction_costs
+    tc = transaction_costs.estimate(list(w))
+    avg_bps = sum(d["total_bps"] for d in tc.values()) / max(len(tc), 1)
+    o2.markdown(f'<div class="kpi"><div class="l">Active method</div>'
+                f'<div class="v" style="color:{theme.ACCENT};font-size:30px">{method.upper()}</div>'
+                f'<div class="s">Toggle changes the target used for sizing below.</div></div>', unsafe_allow_html=True)
+    o3.markdown(f'<div class="kpi"><div class="l">Avg est. trade cost</div>'
+                f'<div class="v">{avg_bps:.1f} bps</div>'
+                f'<div class="s">spread + sqrt market impact, per-name</div></div>', unsafe_allow_html=True)
+
+    # --- heatmap ---
+    top = _q(f"SELECT ticker,{','.join(FACS)} FROM scores WHERE asof_date=? ORDER BY composite DESC LIMIT 30", (asof,))
+    bot = _q(f"SELECT ticker,{','.join(FACS)} FROM scores WHERE asof_date=? ORDER BY composite ASC LIMIT 30", (asof,))
     heat = pd.concat([top, bot])
     if not heat.empty:
-        facs = ["momentum", "value", "quality", "growth", "revisions", "short_interest", "insider", "institutional"]
-        fig = go.Figure(go.Heatmap(z=heat[facs].values, x=facs, y=heat["ticker"],
-                                   colorscale="RdYlGn", zmid=50, colorbar=dict(title="pct")))
-        fig.update_layout(height=720, template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
-                          plot_bgcolor="rgba(0,0,0,0)", title="Factor heatmap — top 30 / bottom 30")
+        fig = go.Figure(go.Heatmap(z=heat[FACS].values, x=FAC_LABELS, y=heat["ticker"],
+                                   colorscale=[[0, theme.SHORT], [0.5, "#16203a"], [1, theme.LONG]], zmid=50))
+        fig.update_layout(height=760, template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
+                          plot_bgcolor="rgba(0,0,0,0)", title="Factor scoring heatmap (top + bottom by composite)",
+                          yaxis=dict(autorange="reversed"), margin=dict(l=10, r=10, t=40, b=10))
         st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("#### Candidates")
-    longs = top.head(10)
-    shorts = bot.head(10)
-    extra = _q("SELECT ticker,piotroski,altman_z FROM scores WHERE asof_date=?", (asof,)).set_index("ticker")
-    for title, df, cls in [("LONG", longs, "long"), ("SHORT", shorts, "short")]:
-        st.markdown(f'<span class="pill {cls}" style="background:#1a2035">{title}</span>', unsafe_allow_html=True)
-        for c, (_, r) in zip(st.columns(5) * 2 if len(df) > 5 else st.columns(len(df)), df.iterrows()):
-            pio = extra.loc[r.ticker, "piotroski"] if r.ticker in extra.index else None
-            alt = extra.loc[r.ticker, "altman_z"] if r.ticker in extra.index else None
-            c.markdown(theme.card(
-                f'<b>{r.ticker}</b> <span class="badge">{r.sector[:10]}</span><br>'
-                f'<span class="{cls} mono" style="font-size:22px">{r.composite:.0f}</span><br>'
-                f'<span class="badge">F {pio if pio is not None else "—"}</span> '
-                f'<span class="badge">Z {alt:.1f}</span>' if alt is not None else
-                f'<b>{r.ticker}</b><br><span class="mono">{r.composite:.0f}</span>'), unsafe_allow_html=True)
+    # --- candidate cards ---
+    sc = _q(f"SELECT ticker,composite,sector,piotroski,altman_z FROM scores WHERE asof_date=?", (asof,)).set_index("ticker")
+    aum = float(cfg.get("portfolio.aum", 1_000_000))
+    longs = sorted([t for t in w if w[t] > 0], key=lambda t: -w[t])[:10]
+    shorts = sorted([t for t in w if w[t] < 0], key=lambda t: w[t])[:10]
+    prices = _last_closes(longs + shorts)
 
+    lc, sccol = st.columns(2)
+    with lc:
+        st.markdown('<div class="an-h">TOP 10 LONG CANDIDATES</div>', unsafe_allow_html=True)
+        for t in longs:
+            _candidate(t, w, b, sc, prices, aum, decisions)
+    with sccol:
+        st.markdown('<div class="an-h">TOP 10 SHORT CANDIDATES</div>', unsafe_allow_html=True)
+        for t in shorts:
+            _candidate(t, w, b, sc, prices, aum, decisions)
+
+    # --- execute approved ---
     st.markdown("---")
-    st.info("Execution is human-in-the-loop. Approve below to build & place the target (paper).")
-    cc1, cc2 = st.columns(2)
-    if cc1.button("① Build target portfolio", use_container_width=True):
-        from portfolio import mvo_optimizer, optimizer as conviction, construct
-        if method == "mvo":
-            w, b, s, used = mvo_optimizer.optimize()
-        else:
-            w, b, s = conviction.construct_portfolio(); used = "conviction"
-        construct.store_target(used, w, b, s)
-        st.success(f"Target built ({used}): {construct.summary(w, b, s)}")
-    confirm = cc2.checkbox("I authorize placing PAPER orders")
-    if cc2.button("② Execute (paper)", use_container_width=True, disabled=not confirm):
+    n_app = sum(1 for v in decisions.values() if v == "approved")
+    n_rej = sum(1 for v in decisions.values() if v == "rejected")
+    st.caption(f"Approved {n_app} · Rejected {n_rej} (rejected names are dropped from the target)")
+    confirm = st.checkbox("I authorize placing PAPER orders")
+    if st.button("Build target & Execute (paper) →", type="primary", disabled=not confirm):
+        from portfolio import construct
         from execution import executor
-        with st.spinner("Routing orders through pre-trade veto → Alpaca…"):
+        keep = {t: wt for t, wt in w.items() if decisions.get(t) != "rejected"}
+        construct.store_target(method, keep, b, sc.assign(score=sc["composite"]))
+        with st.spinner("Pre-trade veto → Alpaca…"):
             st.json(executor.run(dry_run=False))
 
 

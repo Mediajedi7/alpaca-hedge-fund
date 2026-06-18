@@ -60,6 +60,23 @@ h1,h2,h3,h4 {{ font-family: '{SANS}', sans-serif; font-weight: 800; color: #f3f5
 .mgrid .mv {{ font-size: 34px; font-weight: 800; color: #f3f5fb; line-height: 1; }}
 .mgrid .ml {{ font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #7e879f; margin-top: 6px; }}
 
+/* KPI cards (Research top) */
+.kpi {{ background: linear-gradient(135deg, {CARD1}, {CARD2}); border: 1px solid #232b40;
+       border-radius: 14px; padding: 16px 18px; min-height: 110px; }}
+.kpi .l {{ font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #7e879f; }}
+.kpi .v {{ font-size: 38px; font-weight: 800; margin: 6px 0 2px; font-family: '{MONO}', monospace; }}
+.kpi .s {{ font-size: 12px; color: #8a93ad; }}
+
+/* candidate cards (Research bottom) */
+.cand {{ background: linear-gradient(135deg, {CARD1}, {CARD2}); border: 1px solid #232b40;
+        border-radius: 14px; padding: 14px 18px; margin-bottom: 6px; }}
+.cand .tkr {{ font-size: 20px; font-weight: 800; }}
+.cand .sc {{ float: right; font-size: 22px; font-weight: 800; font-family: '{MONO}', monospace; }}
+.cand .meta {{ font-family: '{MONO}', monospace; font-size: 13px; color: #aeb6cc; margin-top: 6px; }}
+.cand .fund {{ font-size: 12px; color: #8a93ad; margin-top: 4px; }}
+.amber {{ color: #e0a106; }} .grey {{ color: #9aa4bf; }}
+.an-h {{ font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #7e879f; margin-top: 12px; }}
+
 /* cards (other pages) */
 .card {{ background: linear-gradient(135deg, {CARD1}, {CARD2}); border: 1px solid #232b40;
         border-radius: 14px; padding: 16px 18px; margin-bottom: 12px; }}
