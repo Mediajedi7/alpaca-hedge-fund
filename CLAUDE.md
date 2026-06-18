@@ -17,10 +17,20 @@ live/paper rule still applies — never touch live from here).
   (each sector spans ~0–100), economically coherent (semis top IT, value-traps bottom),
   Piotroski distribution bell-shaped. Scores persist to `scores` + `subfactor_scores`.
   Nightly cron (`run_scoring.py --no-filings --no-13f`, 17:15 ET) now active.
-- **NEXT: Layer 3 (AI Analysis / Claude).** Spec in `docs/BUILD_PLAN.md` §3. Needs
-  `ANTHROPIC_API_KEY` in `.env`. Earnings-call analyzer stays dormant (no transcripts on
-  FMP Premium). Combined score = 60% quant / 40% Claude (`config.analysis.combine`).
-- Layers 4–7 not started.
+- **Layer 3 (AI Analysis / Claude): CODE COMPLETE; non-API surface verified.** 10 modules
+  in `analysis/` + `run_analysis.py`. Model `claude-sonnet-4-6` (prompt said 4-5; 4-6 is the
+  live Sonnet). Verified without the key: JSON extraction, combined score (60/40, 100%-quant
+  fallback), reports, `--estimate-cost` (~$0.73 cold-cache / 40 candidates). **PENDING: live
+  Claude smoke test** — needs `ANTHROPIC_API_KEY` in `.env` (Alpaca keys are set; Anthropic is not).
+  Earnings analyzer dormant (no FMP transcripts). Cost ceiling $25 (`config.analysis.cost_ceiling_usd`).
+- **NEXT: Layer 4 (Portfolio Construction).** Spec in `docs/BUILD_PLAN.md` §4. Write MVO against
+  a covariance-provider interface (Layer 5 swaps in factor-cov later).
+- Layers 5–7 not started.
+
+### Layer 3 notes
+- `ALPACA_API_KEY`/`ALPACA_SECRET_KEY` now set in `.env` (paper account, `PK` prefix). `ANTHROPIC_API_KEY` still empty.
+- Tables added: `analysis_results` (TTL cache), `combined_scores`. Entry: `run_analysis.py --estimate-cost | --ticker | --sector | (full run)`.
+- Prompt caching is wired (`cache_control: ephemeral` on system) but system prompts are < the 2048-token Sonnet minimum, so it's a no-op until/unless system prompts grow — harmless.
 
 ### Layer 2 operational notes
 - Daily cron uses `--no-filings --no-13f`, so **insider** and **institutional** factors

@@ -69,15 +69,21 @@ factors:
 # LAYER 3 — AI Analysis (Claude)
 # -----------------------------------------------------------------------------
 analysis:
-  model: "claude-sonnet-4-5"       # configurable; latest Sonnet recommended
+  model: "claude-sonnet-4-6"       # current Sonnet (prompt said 4-5; 4-6 is the live model)
+  max_tokens: 3000
   prompt_caching: true
   cost_ceiling_usd: 25.0           # hard ceiling per run; abort if exceeded
   cache_ttl_days: 30
+  candidates_per_side: 20          # 20 long + 20 short for a full run
   earnings_transcript_max_chars: 120000
   risk_factors_max_chars: 80000
   combine:                         # combined_score.py
     quant_weight: 0.60
     claude_weight: 0.40            # avg of available analyzers; 100% quant if none, no penalty
+  pricing:                         # USD per 1M tokens (cost_tracker)
+    "claude-sonnet-4-6": {input: 3.00, output: 15.00, cache_write: 3.75, cache_read: 0.30}
+    "claude-opus-4-8":   {input: 5.00, output: 25.00, cache_write: 6.25, cache_read: 0.50}
+    "claude-haiku-4-5":  {input: 1.00, output: 5.00,  cache_write: 1.25, cache_read: 0.10}
 
 # -----------------------------------------------------------------------------
 # LAYER 4 — Portfolio Construction

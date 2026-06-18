@@ -39,7 +39,7 @@ in `config.yaml: factors.weights`. No data → sector median (50).
 
 Output: per-ticker sub-scores + 8 parent scores + composite, stored for Layers 3/4.
 
-## 3. AI Analysis (Claude)
+## 3. AI Analysis (Claude) — CODE COMPLETE (live test pending key)
 Anthropic SDK, model `config.analysis.model` (use latest Sonnet), prompt caching on system
 prompts, cost tracker w/ $25 ceiling, analysis cache (TTL 30d). Analyzers: earnings-call
 (NEEDS transcripts — **FMP Premium has none; Ultimate-only → analyzer stays dormant**),
