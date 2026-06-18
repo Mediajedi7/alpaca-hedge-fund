@@ -44,6 +44,15 @@ def ensure_tables(*create_statements: str) -> None:
             conn.executescript(stmt)
 
 
+def add_columns_if_missing(table: str, columns: dict[str, str]) -> None:
+    """Idempotent lightweight migration: ALTER TABLE ADD COLUMN for any missing column."""
+    with get_conn() as conn:
+        existing = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        for col, coltype in columns.items():
+            if col not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}")
+
+
 def set_meta(key: str, value: str) -> None:
     ensure_tables(
         "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);"

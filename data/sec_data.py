@@ -276,6 +276,7 @@ def insider_summary(ticker: str, window_days: int = 90) -> dict:
 
     net_flow = 0.0
     ceo_cfo_buy = False
+    ceo_cfo_buy_value = 0.0
     buy_dates: dict[str, list[str]] = {}
     for r in rows:
         if r["transaction_code"] not in ("P", "S"):  # open-market only
@@ -286,6 +287,7 @@ def insider_summary(ticker: str, window_days: int = 90) -> dict:
             title = (r["insider_title"] or "").upper()
             if "CEO" in title or "CHIEF EXECUTIVE" in title or "CFO" in title or "CHIEF FINANCIAL" in title:
                 ceo_cfo_buy = True
+                ceo_cfo_buy_value += val * 3.0  # CEO/CFO buys weighted 3x
             buy_dates.setdefault(r["insider_name"] or "?", []).append(r["date"])
         else:
             net_flow -= val
@@ -302,7 +304,13 @@ def insider_summary(ticker: str, window_days: int = 90) -> dict:
             cluster = True
             break
 
-    return {"net_dollar_flow": net_flow, "ceo_cfo_purchase": ceo_cfo_buy, "cluster_buy": cluster}
+    return {
+        "has_data": len(rows) > 0,
+        "net_dollar_flow": net_flow,
+        "ceo_cfo_purchase": ceo_cfo_buy,
+        "ceo_cfo_buy_value": ceo_cfo_buy_value,
+        "cluster_buy": cluster,
+    }
 
 
 if __name__ == "__main__":

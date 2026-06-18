@@ -10,12 +10,27 @@ from that project unless Tommy explicitly says to. Both are paper accounts (the
 live/paper rule still applies — never touch live from here).
 
 ## STATUS — resume here
-- **Layer 1 (Data Infrastructure): COMPLETE & verified live in-container.** All 7
-  sources work. Committed: `4152f83`.
-- **NEXT: Layer 2 (Scoring Engine)** — 8 factors / 27 sub-factors, 0–100 percentile
-  rank within GICS sector. Full spec in `docs/BUILD_PLAN.md` §2. Factor weights and
-  the `revisions_min_snapshot_days`, `no_data_score` knobs are already in `config.yaml`.
-- Layers 3–7 not started.
+- **Layer 1 (Data Infrastructure): COMPLETE & verified live.** All 7 sources. `4152f83`.
+- **Layer 2 (Scoring Engine): COMPLETE & verified live.** 8 factors / 27 sub-factors in
+  `factors/`, sector-percentile ranked, blended in `factors/composite.py`. Entry
+  `run_scoring.py` (refresh → score). Validated on full 503-name universe: sector-neutral
+  (each sector spans ~0–100), economically coherent (semis top IT, value-traps bottom),
+  Piotroski distribution bell-shaped. Scores persist to `scores` + `subfactor_scores`.
+  Nightly cron (`run_scoring.py --no-filings --no-13f`, 17:15 ET) now active.
+- **NEXT: Layer 3 (AI Analysis / Claude).** Spec in `docs/BUILD_PLAN.md` §3. Needs
+  `ANTHROPIC_API_KEY` in `.env`. Earnings-call analyzer stays dormant (no transcripts on
+  FMP Premium). Combined score = 60% quant / 40% Claude (`config.analysis.combine`).
+- Layers 4–7 not started.
+
+### Layer 2 operational notes
+- Daily cron uses `--no-filings --no-13f`, so **insider** and **institutional** factors
+  are NOT refreshed nightly (heavy/slow-moving). They currently read sparse data (insider:
+  only AAPL/NVDA from testing; 13-F: only Berkshire+Pershing) → those two factors are
+  near-degenerate (~50) for most names until a full pull is run. To populate: run
+  `run_data.py --tickers <subset>` (insider) and `python3 -m data.institutional` (all 9 funds).
+- Degenerate factors (revisions until 30d of snapshots; sparse insider/institutional)
+  re-rank to ~51 not exactly 50 — uniform within sector, so no effect on rankings.
+- Dev tool: `python3 -m scripts.inspect_scores [SECTOR]`.
 
 ## Architecture / conventions
 - **`config.yaml` is the single source of truth** for every tunable and risk limit.

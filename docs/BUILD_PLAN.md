@@ -10,7 +10,7 @@ quarterly+annual), SEC (10-K/10-Q/8-K + Form 4 insider w/ CEO-CFO & cluster flag
 13-F institutional (9 funds, CUSIP→ticker), short interest, analyst estimates, earnings
 calendar. Entry: `run_data.py` (`--no-filings --no-13f --forms --tickers`).
 
-## 2. Scoring Engine — NEXT
+## 2. Scoring Engine — DONE
 8 factors / 27 sub-factors. **Every score = 0–100 percentile rank WITHIN GICS sector.**
 Equal-weight sub-factors within each parent, then sector-percentile. Composite weights
 in `config.yaml: factors.weights`. No data → sector median (50).

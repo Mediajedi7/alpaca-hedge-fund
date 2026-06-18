@@ -27,6 +27,31 @@ from data import (
 log = get_logger("run_data")
 
 
+def refresh(no_filings: bool = False, no_13f: bool = False, forms: list[str] | None = None,
+            tickers: list[str] | None = None, skip_fundamentals: bool = False,
+            sleep: float = 0.0) -> None:
+    """Run the Layer 1 data refresh. Shared by run_data.py and run_scoring.py."""
+    t0 = time.time()
+    universe.refresh_universe()
+    tk = tickers or universe.get_universe_tickers()
+    price_tickers = tickers or universe.all_price_tickers()
+
+    market_data.update_prices(price_tickers, sleep=sleep)
+    if not skip_fundamentals:
+        fundamentals.update_fundamentals(tk, sleep=sleep)
+    short_interest.update_short_interest(tk, sleep=sleep)
+    estimates.update_estimates(tk, sleep=sleep)
+    earnings_calendar.update_earnings_calendar(tk, sleep=sleep)
+
+    if not no_filings:
+        sec_data.update_filings(tk, forms=forms)
+        sec_data.update_form4(tk)
+    if not no_13f:
+        institutional.update_institutional()
+
+    log.info("Layer 1 data refresh complete in %.1fs", time.time() - t0)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Meridian Layer 1 data refresh")
     ap.add_argument("--no-filings", action="store_true", help="skip SEC 10-K/10-Q/8-K + Form 4")
@@ -36,29 +61,8 @@ def main() -> None:
     ap.add_argument("--skip-fundamentals", action="store_true")
     ap.add_argument("--sleep", type=float, default=0.0, help="politeness delay between API calls")
     args = ap.parse_args()
-
-    t0 = time.time()
-    universe.refresh_universe()
-    tickers = args.tickers or universe.get_universe_tickers()
-
-    price_tickers = args.tickers or universe.all_price_tickers()
-    market_data.update_prices(price_tickers, sleep=args.sleep)
-
-    if not args.skip_fundamentals:
-        fundamentals.update_fundamentals(tickers, sleep=args.sleep)
-
-    short_interest.update_short_interest(tickers, sleep=args.sleep)
-    estimates.update_estimates(tickers, sleep=args.sleep)
-    earnings_calendar.update_earnings_calendar(tickers, sleep=args.sleep)
-
-    if not args.no_filings:
-        sec_data.update_filings(tickers, forms=args.forms)
-        sec_data.update_form4(tickers)
-
-    if not args.no_13f:
-        institutional.update_institutional()
-
-    log.info("Layer 1 data refresh complete in %.1fs", time.time() - t0)
+    refresh(args.no_filings, args.no_13f, args.forms, args.tickers,
+            args.skip_fundamentals, args.sleep)
 
 
 if __name__ == "__main__":

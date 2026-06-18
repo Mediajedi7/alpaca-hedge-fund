@@ -12,7 +12,7 @@ import pandas as pd
 import requests
 
 from core.config import cfg, env
-from core.db import ensure_tables, get_conn, set_meta
+from core.db import add_columns_if_missing, ensure_tables, get_conn, set_meta
 from core.log import get_logger
 from data.universe import get_universe_tickers
 
@@ -33,10 +33,10 @@ CREATE TABLE IF NOT EXISTS fundamentals (
     cfo_to_ni REAL, accruals_ratio REAL, retained_earnings REAL, working_capital REAL,
     total_liabilities REAL, ebit REAL, rd_expense REAL, shares_outstanding REAL,
     dividends_paid REAL, buybacks REAL, asset_turnover REAL,
-    -- raw line items kept for Altman/Piotroski in Layer 2
+    -- raw line items kept for Altman/Piotroski/Value in Layer 2
     revenue REAL, net_income REAL, total_assets REAL, total_equity REAL,
     total_current_assets REAL, total_current_liabilities REAL, operating_cash_flow REAL,
-    free_cash_flow REAL, gross_profit REAL, market_cap REAL,
+    free_cash_flow REAL, gross_profit REAL, market_cap REAL, ebitda REAL, enterprise_value REAL,
     source          TEXT,
     updated_at      TEXT,
     PRIMARY KEY (ticker, period_end, period_type)
@@ -85,6 +85,7 @@ def _fetch_fmp(ticker: str, period: str, limit: int) -> pd.DataFrame:
             "revenue": r.get("revenue"),
             "gross_profit": r.get("grossProfit"),
             "operating_income": r.get("operatingIncome"),
+            "ebitda": r.get("ebitda"),
             "net_income": r.get("netIncome"),
             "rd_expense": r.get("researchAndDevelopmentExpenses"),
             "shares_outstanding": r.get("weightedAverageShsOut"),
@@ -101,15 +102,18 @@ def _fetch_fmp(ticker: str, period: str, limit: int) -> pd.DataFrame:
             "dividends_paid": c.get("netDividendsPaid", c.get("commonDividendsPaid")),
             "buybacks": c.get("commonStockRepurchased"),
             "market_cap": k.get("marketCap"),
+            "enterprise_value": k.get("enterpriseValue"),
         })
     return pd.DataFrame(rows).sort_values("period_end").reset_index(drop=True)
 
 
-def _compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
-    """Add the 24 derived ratios. df is sorted ascending by period_end."""
+def _compute_ratios(df: pd.DataFrame, period_type: str) -> pd.DataFrame:
+    """Add the 24 derived ratios. df is sorted ascending by period_end.
+    period_type ('Q'/'A') drives YoY lag and TTM aggregation."""
     if df.empty:
         return df
     out = df.copy()
+    out["period_type"] = period_type
     sd = _safe_div
     out["roe"] = out.apply(lambda r: sd(r.net_income, r.total_equity), axis=1)
     out["roa"] = out.apply(lambda r: sd(r.net_income, r.total_assets), axis=1)
@@ -117,7 +121,12 @@ def _compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
     out["operating_margin"] = out.apply(lambda r: sd(r.operating_income, r.revenue), axis=1)
     out["net_margin"] = out.apply(lambda r: sd(r.net_income, r.revenue), axis=1)
     out["debt_to_equity"] = out.apply(lambda r: sd(r.total_debt, r.total_equity), axis=1)
-    out["fcf_yield"] = out.apply(lambda r: sd(r.free_cash_flow, r.market_cap), axis=1)
+    # FCF yield: TTM FCF (rolling 4 quarters) / market cap for quarterly; raw for annual
+    if period_type == "Q":
+        ttm_fcf = out["free_cash_flow"].rolling(4, min_periods=4).sum()
+        out["fcf_yield"] = [sd(f, m) for f, m in zip(ttm_fcf, out["market_cap"])]
+    else:
+        out["fcf_yield"] = out.apply(lambda r: sd(r.free_cash_flow, r.market_cap), axis=1)
     out["current_ratio"] = out.apply(lambda r: sd(r.total_current_assets, r.total_current_liabilities), axis=1)
     out["ar_to_revenue"] = out.apply(lambda r: sd(r.net_receivables, r.revenue), axis=1)
     out["cfo_to_ni"] = out.apply(lambda r: sd(r.operating_cash_flow, r.net_income), axis=1)
@@ -131,7 +140,7 @@ def _compute_ratios(df: pd.DataFrame) -> pd.DataFrame:
     out["buybacks"] = out["buybacks"].abs()
 
     # Growth: QoQ = vs prior row; YoY = vs 4 rows back (quarterly) / 1 back (annual)
-    yoy_lag = 4 if (out.get("period_type", pd.Series(["Q"])).iloc[0] == "Q") else 1
+    yoy_lag = 4 if period_type == "Q" else 1
     out["rev_growth_qoq"] = out["revenue"].pct_change(1)
     out["rev_growth_yoy"] = out["revenue"].pct_change(yoy_lag)
     out["earnings_growth_qoq"] = out["net_income"].pct_change(1)
@@ -149,7 +158,7 @@ _RATIO_COLS = [
 _RAW_COLS = [
     "revenue", "net_income", "total_assets", "total_equity", "total_current_assets",
     "total_current_liabilities", "operating_cash_flow", "free_cash_flow", "gross_profit",
-    "market_cap",
+    "market_cap", "ebitda", "enterprise_value",
 ]
 
 
@@ -175,6 +184,7 @@ def _store(ticker: str, df: pd.DataFrame, period_type: str, source: str) -> int:
 
 def update_fundamentals(tickers: list[str] | None = None, sleep: float = 0.0) -> int:
     ensure_tables(_SCHEMA)
+    add_columns_if_missing("fundamentals", {"ebitda": "REAL", "enterprise_value": "REAL"})
     tickers = tickers or get_universe_tickers()
     primary = cfg.get("data.fundamentals_provider", "fmp")
     total = 0
@@ -182,10 +192,8 @@ def update_fundamentals(tickers: list[str] | None = None, sleep: float = 0.0) ->
         stored = 0
         if primary == "fmp":
             try:
-                q = _compute_ratios(_fetch_fmp(t, "quarter", 16))
-                q["period_type"] = "Q" if not q.empty else "Q"
-                a = _compute_ratios(_fetch_fmp(t, "annual", 6))
-                a["period_type"] = "A" if not a.empty else "A"
+                q = _compute_ratios(_fetch_fmp(t, "quarter", 16), "Q")
+                a = _compute_ratios(_fetch_fmp(t, "annual", 6), "A")
                 stored += _store(t, q, "Q", "fmp")
                 stored += _store(t, a, "A", "fmp")
             except Exception as e:  # noqa: BLE001
@@ -241,9 +249,11 @@ def _yfinance_fallback(ticker: str) -> int:
                 "free_cash_flow": g(cf, "Free Cash Flow"),
                 "dividends_paid": g(cf, "Cash Dividends Paid"),
                 "buybacks": g(cf, "Repurchase Of Capital Stock"),
+                "ebitda": g(inc, "EBITDA", "Normalized EBITDA"),
                 "market_cap": None,
+                "enterprise_value": None,
             })
-        df = _compute_ratios(pd.DataFrame(rows).sort_values("period_end").reset_index(drop=True))
+        df = _compute_ratios(pd.DataFrame(rows).sort_values("period_end").reset_index(drop=True), "Q")
         return _store(ticker, df, "Q", "yfinance")
     except Exception as e:  # noqa: BLE001
         log.warning("yfinance fundamentals fallback failed for %s: %s", ticker, e)
