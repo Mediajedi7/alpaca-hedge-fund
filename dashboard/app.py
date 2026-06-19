@@ -38,6 +38,16 @@ if "jarvis_history" not in st.session_state:
 
 page = st.session_state.page
 
+# Tab-bar nav at the top, divider beneath it. Button-based (reruns in place, same
+# Streamlit session), so login/auth persists across navigation — no page reload.
+_nc = st.columns(len(NAV))
+for _i, (_rn, _lab) in enumerate(NAV):
+    if _nc[_i].button(f"{_rn}  {_lab}", key=f"nav_{_i}", use_container_width=True,
+                      type="primary" if st.session_state.page == _i else "secondary"):
+        st.session_state.page = _i
+        st.rerun()
+st.divider()
+
 # auto-refresh during market hours
 now = datetime.now()
 if cfg.get("dashboard.market_open", "09:30") <= now.strftime("%H:%M") <= cfg.get("dashboard.market_close", "16:00") \
@@ -723,13 +733,3 @@ try:
     PAGE_FNS[page]()
 except Exception as e:  # noqa: BLE001
     st.error(f"Page error: {e}")
-
-# Tab-bar nav at the bottom. Button-based (reruns in place, same Streamlit session),
-# so login/auth persists across navigation — no page reload.
-st.divider()
-_nc = st.columns(len(NAV))
-for _i, (_rn, _lab) in enumerate(NAV):
-    if _nc[_i].button(f"{_rn}  {_lab}", key=f"nav_{_i}", use_container_width=True,
-                      type="primary" if st.session_state.page == _i else "secondary"):
-        st.session_state.page = _i
-        st.rerun()
