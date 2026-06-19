@@ -68,6 +68,14 @@ def _asof(table="scores"):
 
 
 # ---------------- PAGE I: PORTFOLIO (cover) ----------------
+@st.cache_data(ttl=30, show_spinner=False)
+def _account():
+    """Live Alpaca paper account snapshot (cached briefly)."""
+    from execution.broker import Broker
+    a = Broker().account()
+    return {"equity": float(a.equity), "last_equity": float(a.last_equity), "cash": float(a.cash)}
+
+
 def page_portfolio():
     m = jarvis.metrics()
     left, right = st.columns([44, 56], gap="large")
@@ -76,6 +84,28 @@ def page_portfolio():
                     '<div class="subtitle">Long / Short Hedge Fund Analyst</div>', unsafe_allow_html=True)
         q = st.text_input("ask", placeholder="Ask anything…", label_visibility="collapsed")
         asked = st.button("ASK JARVIS", type="primary")
+
+        # live Alpaca paper account: balance + running P&L
+        try:
+            a = _account()
+            start = float(cfg.get("fund.starting_capital", 100_000))
+            day = a["equity"] - a["last_equity"]
+            tot = a["equity"] - start
+            dpct = (day / a["last_equity"] * 100) if a["last_equity"] else 0.0
+            tpct = (a["equity"] / start - 1) * 100 if start else 0.0
+            dcol = theme.LONG if day >= 0 else theme.SHORT
+            tcol = theme.LONG if tot >= 0 else theme.SHORT
+            st.markdown(
+                '<div class="acct">'
+                f'<div><div class="al">Account balance</div><div class="av">${a["equity"]:,.0f}</div>'
+                f'<div class="as">${a["cash"]:,.0f} cash</div></div>'
+                f'<div><div class="al">Today P&amp;L</div><div class="av" style="color:{dcol}">{day:+,.0f}</div>'
+                f'<div class="as" style="color:{dcol}">{dpct:+.2f}%</div></div>'
+                f'<div><div class="al">Total P&amp;L</div><div class="av" style="color:{tcol}">{tot:+,.0f}</div>'
+                f'<div class="as" style="color:{tcol}">{tpct:+.2f}% since ${start:,.0f}</div></div>'
+                '</div>', unsafe_allow_html=True)
+        except Exception as e:  # noqa: BLE001
+            st.caption(f"Live account data unavailable: {e}")
 
         if asked and q:
             with st.spinner("JARVIS analyzing…"):

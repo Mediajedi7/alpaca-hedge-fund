@@ -117,6 +117,14 @@ h1,h2,h3,h4 {{ font-family: '{SANS}', sans-serif; font-weight: 800; color: #f3f5
 .about ol {{ margin: 10px 0 0; padding-left: 18px; }}
 .about li {{ font-size: 12px; color: #9aa3bd; margin-bottom: 4px; }}
 .about li b {{ color: {ACCENT}; font-weight: 700; }}
+/* live account balance + P&L strip (cover) */
+.acct {{ display: flex; gap: 10px; margin: 12px 0 4px; }}
+.acct > div {{ flex: 1; background: linear-gradient(135deg, {CARD1}, {CARD2}); border: 1px solid #232b40;
+              border-radius: 12px; padding: 12px 14px; }}
+.acct .al {{ font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: #7e879f; }}
+.acct .av {{ font-size: 26px; font-weight: 800; color: #f3f5fb; font-family: '{MONO}', monospace;
+            margin-top: 5px; line-height: 1; }}
+.acct .as {{ font-size: 11px; color: #8a93ad; margin-top: 4px; }}
 </style>
 """
 

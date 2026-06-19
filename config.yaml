@@ -11,6 +11,7 @@ fund:
   inception: "2026-06-17"
   base_currency: "USD"
   mode: "paper"            # paper | live  (live also requires the typed confirmation in execution/broker.py)
+  starting_capital: 100000 # baseline for the dashboard's Total P&L (paper account seed)
 
 # -----------------------------------------------------------------------------
 # LAYER 1 — Data Infrastructure
