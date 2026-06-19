@@ -190,3 +190,20 @@ schedule:
   # Daily scoring runs in-container via supercronic (replaces the macOS launchd plist).
   # Weekdays 17:15 America/New_York -> run_scoring.py --no-filings --no-13f
   daily_scoring_cron: "15 17 * * 1-5"
+
+# -----------------------------------------------------------------------------
+# Dashboard authentication (MFA + trusted-device). Secrets live in .env only:
+#   AUTH_USER / AUTH_PASSWORD_HASH / AUTH_TOTP_SECRET / SMTP_PASSWORD
+# mfa=email needs SMTP_PASSWORD set; otherwise it safely falls back to TOTP.
+# -----------------------------------------------------------------------------
+auth:
+  mfa: "email"                     # email | totp
+  otp_email_to: "tommy@mediajedi.net"
+  otp_ttl_minutes: 10              # how long an emailed code stays valid
+  remember_device_days: 30         # "remember this device" skips the OTP (still asks password)
+
+smtp:
+  host: "mail.smtp2go.com"
+  port: 2525
+  user: "claude@tktechservices.com"
+  from: "JARVIS <claude@tktechservices.com>"

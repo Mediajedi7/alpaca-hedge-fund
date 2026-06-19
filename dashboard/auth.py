@@ -1,36 +1,179 @@
-"""In-app login gate with TOTP 2FA. Active only when AUTH_PASSWORD_HASH is set in
-.env (so local/LAN stays open until you configure it). Requires username + password
-+ a 6-digit authenticator-app code. Generate credentials with scripts/setup_auth.py.
+"""In-app login gate with MFA + a 30-day trusted-device.
 
-NOTE: serve behind HTTPS (reverse proxy / tunnel) so the password isn't sent in
-cleartext — app-level auth does not provide transport security."""
+Active only when AUTH_PASSWORD_HASH is set in .env (so local/LAN stays open until you
+configure it). Flow:
+
+  1. username + password
+  2. second factor — emailed one-time code (mfa: email) or authenticator TOTP
+     (mfa: totp / fallback when SMTP isn't configured)
+  3. optional "remember this device for N days" — sets a *signed* cookie so future
+     sessions on the same browser skip the code (they still ask for the password).
+
+The device cookie is read from the request headers (st.context.headers) and written
+with extra_streamlit_components' CookieManager. The cookie value is HMAC-signed with a
+server-only secret, so it can't be forged or extended client-side.
+
+Serve behind HTTPS (reverse proxy / tunnel) so the password isn't sent in cleartext —
+app-level auth does not provide transport security.
+"""
 from __future__ import annotations
 
 import hashlib
 import hmac
+import secrets
+import smtplib
 import time
+from datetime import datetime, timedelta
+from email.message import EmailMessage
 
 import streamlit as st
 
-from core.config import env
+from core.config import cfg, env
+
+try:  # cookie writer (set in require_login); reads use st.context.headers and need no dep
+    import extra_streamlit_components as stx
+    _HAS_COOKIES = True
+except Exception:  # noqa: BLE001
+    _HAS_COOKIES = False
+
+_COOKIE = "mhf_device"
 
 
+# --------------------------------------------------------------------------- config
 def _configured() -> bool:
     return bool(env("AUTH_PASSWORD_HASH"))
 
 
-def _check(user: str, password: str, code: str) -> bool:
+def _smtp_ready() -> bool:
+    return bool(env("SMTP_PASSWORD") and cfg.get("smtp.user") and cfg.get("auth.otp_email_to"))
+
+
+def _mfa_mode() -> str:
+    """email when configured+ready, else totp when a secret exists, else none."""
+    want = (cfg.get("auth.mfa", "email") or "email").lower()
+    if want == "email" and _smtp_ready():
+        return "email"
+    return "totp" if env("AUTH_TOTP_SECRET") else "none"
+
+
+# --------------------------------------------------------------------------- creds
+def _creds_ok(user: str, password: str) -> bool:
     if not hmac.compare_digest(user or "", env("AUTH_USER") or ""):
         return False
     pw_hash = hashlib.sha256((password or "").encode()).hexdigest()
-    if not hmac.compare_digest(pw_hash, env("AUTH_PASSWORD_HASH") or ""):
-        return False
+    return hmac.compare_digest(pw_hash, env("AUTH_PASSWORD_HASH") or "")
+
+
+def _totp_ok(code: str) -> bool:
     secret = env("AUTH_TOTP_SECRET")
-    if secret:
-        import pyotp
-        if not pyotp.TOTP(secret).verify((code or "").strip(), valid_window=1):
-            return False
+    if not secret:
+        return False
+    import pyotp
+    return pyotp.TOTP(secret).verify((code or "").strip(), valid_window=1)
+
+
+# ---------------------------------------------------------------- trusted device cookie
+def _device_secret() -> bytes:
+    # server-side only; never sent to the client
+    return ("mhf-device|" + (env("AUTH_PASSWORD_HASH") or "")).encode()
+
+
+def _sign_device(expiry: int) -> str:
+    sig = hmac.new(_device_secret(), str(expiry).encode(), hashlib.sha256).hexdigest()
+    return f"{expiry}.{sig}"
+
+
+def _device_token_valid(token: str) -> bool:
+    try:
+        exp_s, sig = (token or "").split(".", 1)
+        exp = int(exp_s)
+    except (ValueError, AttributeError):
+        return False
+    good = hmac.new(_device_secret(), exp_s.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(sig, good) and exp > int(time.time())
+
+
+def _device_trusted() -> bool:
+    """Read + validate the signed device cookie straight from the request headers."""
+    try:
+        raw = st.context.headers.get("Cookie", "") or ""
+    except Exception:  # noqa: BLE001
+        return False
+    for part in raw.split(";"):
+        part = part.strip()
+        if part.startswith(_COOKIE + "="):
+            return _device_token_valid(part[len(_COOKIE) + 1:])
+    return False
+
+
+def _remember_device(cm) -> None:
+    if not (_HAS_COOKIES and cm is not None):
+        return
+    days = int(cfg.get("auth.remember_device_days", 30))
+    token = _sign_device(int(time.time()) + days * 86400)
+    cm.set(_COOKIE, token, expires_at=datetime.now() + timedelta(days=days), key="set_device")
+
+
+# --------------------------------------------------------------------------- email OTP
+def _send_otp(code: str) -> bool:
+    host = cfg.get("smtp.host", "mail.smtp2go.com")
+    port = int(cfg.get("smtp.port", 2525))
+    user = cfg.get("smtp.user", "")
+    sender = cfg.get("smtp.from", user)
+    to = cfg.get("auth.otp_email_to", "")
+    ttl = int(cfg.get("auth.otp_ttl_minutes", 10))
+    pw = env("SMTP_PASSWORD")
+    if not (pw and to and user):
+        return False
+    msg = EmailMessage()
+    msg["Subject"] = f"Mediajedi Hedge Fund sign-in code: {code}"
+    msg["From"] = sender
+    msg["To"] = to
+    msg.set_content(
+        f"Your JARVIS one-time sign-in code is:\n\n    {code}\n\n"
+        f"It expires in {ttl} minutes. If you didn't try to sign in, ignore this email "
+        "and consider changing the dashboard password."
+    )
+    try:
+        with smtplib.SMTP(host, port, timeout=15) as s:
+            s.starttls()
+            s.login(user, pw)
+            s.send_message(msg)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _issue_otp() -> bool:
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    if not _send_otp(code):
+        return False
+    st.session_state.otp_hash = hashlib.sha256(code.encode()).hexdigest()
+    st.session_state.otp_exp = time.time() + int(cfg.get("auth.otp_ttl_minutes", 10)) * 60
     return True
+
+
+def _otp_ok(code: str) -> bool:
+    h = st.session_state.get("otp_hash")
+    exp = st.session_state.get("otp_exp", 0)
+    if not h or time.time() > exp:
+        return False
+    return hmac.compare_digest(hashlib.sha256((code or "").strip().encode()).hexdigest(), h)
+
+
+def _mask(addr: str) -> str:
+    name, _, dom = (addr or "").partition("@")
+    if not dom:
+        return "your email"
+    shown = name[0] + "***" if name else "***"
+    return f"{shown}@{dom}"
+
+
+# --------------------------------------------------------------------------- the gate
+def _throttle(msg: str) -> None:
+    st.session_state.auth_fails = st.session_state.get("auth_fails", 0) + 1
+    time.sleep(min(5, st.session_state.auth_fails))  # slow brute force
+    st.error(msg)
 
 
 def require_login() -> None:
@@ -39,23 +182,76 @@ def require_login() -> None:
         return
 
     st.session_state.setdefault("auth_fails", 0)
+    st.session_state.setdefault("auth_stage", "creds")
+    cm = stx.CookieManager(key="mhf_cookies") if _HAS_COOKIES else None
+    mode = _mfa_mode()
+
     _, mid, _ = st.columns([1, 1.1, 1])
     with mid:
         st.markdown('<div class="jarvis" style="font-size:64px;text-align:center">JARVIS</div>'
                     '<div class="subtitle" style="text-align:center">Mediajedi Hedge Fund — Sign in</div>',
                     unsafe_allow_html=True)
-        with st.form("login", clear_on_submit=False):
-            user = st.text_input("Username")
-            pw = st.text_input("Password", type="password")
-            code = st.text_input("2FA code", max_chars=6, placeholder="123456")
-            ok = st.form_submit_button("Sign in", type="primary", use_container_width=True)
-        if ok:
-            if _check(user, pw, code):
-                st.session_state.authed = True
+
+        # ---- stage 1: credentials ----
+        if st.session_state.auth_stage == "creds":
+            with st.form("login", clear_on_submit=False):
+                user = st.text_input("Username")
+                pw = st.text_input("Password", type="password")
+                code = (st.text_input("Authenticator code", max_chars=6, placeholder="123456")
+                        if mode == "totp" else None)
+                remember = st.checkbox(
+                    f"Remember this device for {int(cfg.get('auth.remember_device_days', 30))} days")
+                ok = st.form_submit_button("Continue", type="primary", use_container_width=True)
+            if ok:
+                if not _creds_ok(user, pw):
+                    _throttle("Invalid username or password.")
+                    st.stop()
                 st.session_state.auth_fails = 0
+                st.session_state.auth_remember = remember
+                # trusted device or no-MFA -> straight in
+                if _device_trusted() or mode == "none":
+                    st.session_state.authed = True
+                    if remember:
+                        _remember_device(cm)
+                    st.rerun()
+                if mode == "totp":
+                    if _totp_ok(code):
+                        st.session_state.authed = True
+                        if remember:
+                            _remember_device(cm)
+                        st.rerun()
+                    _throttle("Invalid authenticator code.")
+                    st.stop()
+                # mode == email -> send a code, advance to stage 2
+                if _issue_otp():
+                    st.session_state.auth_stage = "otp"
+                    st.rerun()
+                else:
+                    st.error("Couldn't send the email code — SMTP isn't configured. "
+                             "Use your authenticator app or contact the admin.")
+
+        # ---- stage 2: emailed one-time code ----
+        else:
+            st.info(f"We emailed a 6-digit code to **{_mask(cfg.get('auth.otp_email_to', ''))}**. "
+                    f"It expires in {int(cfg.get('auth.otp_ttl_minutes', 10))} minutes.")
+            with st.form("otp", clear_on_submit=False):
+                code = st.text_input("Email code", max_chars=6, placeholder="123456")
+                ok = st.form_submit_button("Verify", type="primary", use_container_width=True)
+            c1, c2 = st.columns(2)
+            if c1.button("Resend code", use_container_width=True):
+                _issue_otp()
+                st.toast("New code sent.")
+            if c2.button("Start over", use_container_width=True):
+                st.session_state.auth_stage = "creds"
                 st.rerun()
-            else:
-                st.session_state.auth_fails += 1
-                time.sleep(min(5, st.session_state.auth_fails))  # throttle brute force
-                st.error("Invalid credentials or 2FA code.")
+            if ok:
+                if _otp_ok(code):
+                    st.session_state.authed = True
+                    st.session_state.auth_stage = "creds"
+                    if st.session_state.get("auth_remember"):
+                        _remember_device(cm)
+                    st.session_state.pop("otp_hash", None)
+                    st.rerun()
+                else:
+                    _throttle("Invalid or expired code.")
     st.stop()
