@@ -72,7 +72,7 @@ analysis:
   model: "claude-sonnet-4-6"       # current Sonnet (prompt said 4-5; 4-6 is the live model)
   max_tokens: 3000
   prompt_caching: true
-  cost_ceiling_usd: 25.0           # hard ceiling per run; abort if exceeded
+  cost_ceiling_usd: 17.0           # hard ceiling per run; abort if exceeded (kept under the API balance)
   cache_ttl_days: 30
   candidates_per_side: 20          # 20 long + 20 short for a full run
   earnings_transcript_max_chars: 120000
