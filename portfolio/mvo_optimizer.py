@@ -19,7 +19,13 @@ log = get_logger("mvo")
 def optimize(n: int | None = None, cov_provider: CovarianceProvider | None = None
              ) -> tuple[dict[str, float], dict[str, float], pd.DataFrame, str]:
     scores = construct.get_scores()
-    longs, shorts = construct.select_candidates(n)
+    # Select from a WIDER pool than the final book and let the optimizer exclude names
+    # (weight floor 0 below). That freedom is what makes the beta-neutral solution
+    # feasible — a fixed top/bottom-n set with a hard floor can be infeasible vs the
+    # beta cap (see scripts/beta_feasibility.py).
+    base_n = n or int(cfg.get("analysis.candidates_per_side", 20))
+    pool_n = max(base_n, int(round(base_n * float(cfg.get("portfolio.mvo.candidate_pool_mult", 2.0)))))
+    longs, shorts = construct.select_candidates(pool_n)
     cov_provider = cov_provider or HistoricalCovarianceProvider()
 
     try:
@@ -60,8 +66,11 @@ def optimize(n: int | None = None, cov_provider: CovarianceProvider | None = Non
     for i, t in enumerate(names):
         sec_groups.setdefault(sectors[t], []).append(i)
 
+    beta_pen = float(cfg.get("portfolio.mvo.beta_penalty", 2.0))
+
     def neg_obj(w):
-        return -mu_eff @ w + lam * w @ Sigma @ w
+        nb = w @ beta
+        return -mu_eff @ w + lam * w @ Sigma @ w + beta_pen * nb * nb
 
     cons = [
         {"type": "eq", "fun": lambda w: w[li].sum() - L},
@@ -80,18 +89,22 @@ def optimize(n: int | None = None, cov_provider: CovarianceProvider | None = Non
         if short_ix[0] >= 0:
             cons.append({"type": "ineq", "fun": lambda w, ix=short_ix: sec_side + w[ix].sum()})
 
-    bounds = [(pmin, pmax)] * len(longs) + [(-pmax, -pmin)] * len(shorts)
+    # Floor 0 (not pmin): lets the optimizer drop names from the wider pool, which is
+    # what makes beta-neutrality feasible. Dust below pmin is removed after solving.
+    bounds = [(0.0, pmax)] * len(longs) + [(-pmax, 0.0)] * len(shorts)
     x0 = np.concatenate([np.full(len(longs), L / max(len(longs), 1)),
                          np.full(len(shorts), -S / max(len(shorts), 1))])
 
     res = minimize(neg_obj, x0, method="SLSQP", bounds=bounds, constraints=cons,
-                   options={"maxiter": 500, "ftol": 1e-9})
+                   options={"maxiter": 1000, "ftol": 1e-9})
 
     if not res.success:
         log.warning("MVO did not converge (%s) — using conviction-tilt fallback", res.message)
         w, b, s = conviction.construct_portfolio(n)
         return w, b, s, "conviction(fallback)"
 
-    weights = {t: float(res.x[i]) for i, t in enumerate(names)}
-    log.info("MVO converged: objective=%.5f", -res.fun)
+    weights = {t: float(res.x[i]) for i, t in enumerate(names) if abs(res.x[i]) >= pmin}
+    s = construct.summary(weights, betas, scores)
+    log.info("MVO converged: %d names, gross=%.2f, net_beta=%.3f",
+             len(weights), s["gross"], s["net_beta"])
     return weights, betas, scores, "mvo"

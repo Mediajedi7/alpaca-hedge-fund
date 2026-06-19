@@ -89,7 +89,7 @@ analysis:
 # LAYER 4 — Portfolio Construction
 # -----------------------------------------------------------------------------
 portfolio:
-  optimize_method: "conviction"    # mvo | conviction  (--optimize-method overrides)
+  optimize_method: "mvo"           # mvo | conviction  (--optimize-method overrides)
   expected_return:                 # composite score -> annualized expected return (linear)
     score_100_return: 0.15
     score_0_return:  -0.15
@@ -99,6 +99,9 @@ portfolio:
     portfolio_beta_cap: 0.15       # optimizer TARGET: |sum(w*beta)| <= this  (tighter than veto 0.20)
     sector_net_max: 0.05           # |sector net| <= 5%
     sector_single_side_max: 0.25   # one book's sector weight <= 25%
+    candidate_pool_mult: 2.0       # MVO picks from this x candidates_per_side and may exclude names;
+                                   # the extra freedom is what makes beta-neutrality feasible
+    beta_penalty: 2.0              # soft objective push toward net-beta 0 (hard cap still applies)
   conviction:
     top_5pct_multiplier: 1.50
     top_10pct_multiplier: 1.25
