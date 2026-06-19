@@ -210,3 +210,6 @@ smtp:
   port: 2525
   user: "claude@tktechservices.com"
   from: "JARVIS <claude@tktechservices.com>"
+
+notify:
+  email_to: "tommy@mediajedi.net"   # operational alerts (Monday auto-execution confirmations)

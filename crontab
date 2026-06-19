@@ -12,5 +12,10 @@
 #
 # Weekly full refresh: Sunday 18:00 ET (~2h). Deep data (filings/insider/13F) + Claude
 # analysis (PAID, capped) + beta-neutral portfolio rebuild, so the book is fresh Monday
-# morning. NEVER trades — execution stays manual (run_execution.py).
+# morning. NEVER trades — execution is handled by the Monday job below.
 0 18 * * 0 /app/scripts/weekly_refresh.sh
+#
+# Monday auto-execution: 09:45 ET (after the open). Runs the Sunday-built target book
+# through the executor — veto- and kill-switch-gated, sized off LIVE equity — and emails
+# a confirmation (or the reason it declined). This is the ONLY job that OPENS positions.
+45 9 * * 1 cd /app && python3 -m scripts.auto_execute >> /app/output/logs/auto_execute.log 2>&1
