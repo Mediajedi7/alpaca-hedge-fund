@@ -62,7 +62,7 @@ h1,h2,h3,h4 {{ font-family: '{SANS}', sans-serif; font-weight: 800; color: #f3f5
 
 /* KPI cards (Research top) */
 .kpi {{ background: linear-gradient(135deg, {CARD1}, {CARD2}); border: 1px solid #232b40;
-       border-radius: 14px; padding: 16px 18px; min-height: 110px; }}
+       border-radius: 14px; padding: 16px 18px; min-height: 110px; margin-bottom: 14px; }}
 .kpi .l {{ font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #7e879f; }}
 .kpi .v {{ font-size: 38px; font-weight: 800; margin: 6px 0 2px; font-family: '{MONO}', monospace; }}
 .kpi .s {{ font-size: 12px; color: #8a93ad; }}
@@ -108,6 +108,15 @@ h1,h2,h3,h4 {{ font-family: '{SANS}', sans-serif; font-weight: 800; color: #f3f5
 .navbar a:hover {{ color: #e6e8ef; }}
 .navbar a.active {{ background: linear-gradient(135deg, {ACCENT}, #4fa800); color:#fff; }}
 .navbar a.active .rn {{ color: #dffbc0; }}
+/* cover "what JARVIS does" overview box */
+.about {{ background: linear-gradient(135deg, {CARD1}, {CARD2}); border: 1px solid #232b40;
+         border-left: 3px solid {ACCENT}; border-radius: 14px; padding: 16px 18px; margin-top: 28px; }}
+.about .h {{ font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: {ACCENT}; margin-bottom: 8px; }}
+.about p {{ font-size: 12.5px; line-height: 1.55; color: #aeb6cc; margin: 0; }}
+.about b {{ color: #e6e8ef; font-weight: 700; }}
+.about ol {{ margin: 10px 0 0; padding-left: 18px; }}
+.about li {{ font-size: 12px; color: #9aa3bd; margin-bottom: 4px; }}
+.about li b {{ color: {ACCENT}; font-weight: 700; }}
 </style>
 """
 

@@ -98,6 +98,21 @@ def page_portfolio():
                  ("CEO/CFO Buys", m["ceo_buys"]), ("Cluster Buys", m["cluster_buys"]),
                  ("VIX", m["vix"]), ("Earnings · 7d", m["earnings_7d"])]
         st.markdown(theme.metrics_grid(items), unsafe_allow_html=True)
+
+        st.markdown(
+            '<div class="about">'
+            '<div class="h">What JARVIS does</div>'
+            '<p>An autonomous <b>long/short equity</b> analyst that turns the S&amp;P 500 into a '
+            'market-neutral book — and explains every call. It runs a seven-layer pipeline daily:</p>'
+            '<ol>'
+            '<li><b>Scores</b> every name on 8 factors (momentum, value, quality, growth, revisions, '
+            'short interest, insider &amp; institutional), ranked within its sector.</li>'
+            '<li><b>Reads</b> 10-Ks, insider filings and risk factors with Claude for a qualitative overlay.</li>'
+            '<li><b>Builds</b> the long/short book via mean-variance optimization with conviction tilts.</li>'
+            '<li><b>Vetoes</b> trades against hard risk limits (beta, sector, liquidity, earnings) and circuit breakers.</li>'
+            '<li><b>Executes</b> on Alpaca paper and reports — performance, attribution and a daily investors’ letter.</li>'
+            '</ol>'
+            '</div>', unsafe_allow_html=True)
     with right:
         uri = theme.robot_data_uri()
         if uri:
@@ -593,7 +608,7 @@ def page_performance():
     # turnover cards
     t = analytics.turnover(30)
     tax = analytics.tax_estimate()
-    tk = st.columns(4)
+    tk = st.columns(4, gap="medium")
     _kpi(tk[0], "Turnover (30d)", f"{t['turnover']:.1%}", f"{analytics.roundtrips().__len__()} round-trips · ${t['notional']:,.0f} notional")
     _kpi(tk[1], "Annualized turnover", f"{t['annualized']*100:.0f}%", "30d window × 12.17")
     _kpi(tk[2], "Vs. budget", f"{t['annualized']*100:.0f}% / {t['budget']*100:.0f}%",
@@ -609,7 +624,7 @@ def page_performance():
         d = transaction_costs.estimate(list(tp.ticker))
         est = sum(x["total_bps"] for x in d.values()) / max(len(d), 1)
     slip = costs.slippage_stats()
-    ck = st.columns(3)
+    ck = st.columns(3, gap="medium")
     _kpi(ck[0], "Avg estimated cost", f"{est:.1f} bps", "MVO model: spread + sqrt impact")
     _kpi(ck[1], "Avg actual slippage", f"{slip['avg_bps']:+.1f} bps", f"over {slip['n']} orders, last 30d",
          theme.SHORT if slip['avg_bps'] > 0 else theme.LONG)
