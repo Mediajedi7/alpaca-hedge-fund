@@ -140,9 +140,12 @@ The macOS launchd plist in the original prompt is SUPERSEDED by the container's 
   ```
   rsync -az --rsync-path=/usr/bin/rsync \
     -e "ssh -i /Users/tommy/.ssh/claude_nas -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no" \
-    --exclude '.git' --exclude 'cache' --exclude 'output' --exclude '__pycache__' --exclude '.DS_Store' --exclude '.venv' \
+    --exclude '.git' --exclude 'cache' --exclude 'output' --exclude '__pycache__' --exclude '.DS_Store' --exclude '.venv' --exclude '.env' \
     ./ admin@10.0.1.6:/volume2/Docker/AlpacaHedgeFund/
   ```
+  ⚠️ ALWAYS `--exclude '.env'` — the NAS `.env` is authoritative (holds secrets + the
+  dashboard AUTH_* login creds set via `setup_auth`). Syncing the local `.env` over it
+  wipes NAS-only edits (this silently disabled dashboard auth once).
 - Test fast against the running container: `./nas.sh "docker exec alpaca-hedge-fund sh -c 'cd /app && python3 -m data.<module> AAPL'"`.
 - Rebuild image only when `requirements.txt` changes:
   `./nas.sh "cd /volume2/Docker/AlpacaHedgeFund && docker compose build fund"`.
