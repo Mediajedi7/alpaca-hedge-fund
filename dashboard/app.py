@@ -178,7 +178,7 @@ def _render_analysis(t, cl):
         st.rerun()
 
 
-def _candidate(t, w, b, sc, prices, aum, decisions):
+def _candidate(t, w, b, sc, prices, aum):
     weight, beta, price = w[t], b.get(t, 1.0), prices.get(t)
     shares = round(weight * aum / price) if price else 0
     notional = abs(shares * (price or 0))
@@ -198,15 +198,6 @@ def _candidate(t, w, b, sc, prices, aum, decisions):
         f'<div class="cand"><span class="sc" style="color:{col}">{comp:.0f}</span>'
         f'<span class="tkr">{t}</span> <span class="badge">{sector}</span></div>',
         unsafe_allow_html=True)
-    a, rj, rs = st.columns(3)
-    if a.button("Approve", key=f"ap_{t}", type="primary", use_container_width=True):
-        decisions[t] = "approved"
-    if rj.button("Reject", key=f"rj_{t}", use_container_width=True):
-        decisions[t] = "rejected"
-    if rs.button("Reset", key=f"rs_{t}", use_container_width=True):
-        decisions.pop(t, None)
-    if t in decisions:
-        st.caption(f"→ {decisions[t].upper()}")
     cl = cache.all_for_ticker(t)
     with st.expander(f"{t} — Claude analysis" if cl else f"{t} — analyze with Claude"):
         _render_analysis(t, cl)
@@ -214,7 +205,6 @@ def _candidate(t, w, b, sc, prices, aum, decisions):
 
 def page_research():
     asof = _asof()
-    decisions = st.session_state.setdefault("decisions", {})
     method = "mvo"  # set after we read the radio below; placeholder for KPI cost calc
 
     # --- KPI cards ---
@@ -276,23 +266,29 @@ def page_research():
     with lc:
         st.markdown('<div class="an-h">TOP 10 LONG CANDIDATES</div>', unsafe_allow_html=True)
         for t in longs:
-            _candidate(t, w, b, sc, prices, aum, decisions)
+            _candidate(t, w, b, sc, prices, aum)
     with sccol:
         st.markdown('<div class="an-h">TOP 10 SHORT CANDIDATES</div>', unsafe_allow_html=True)
         for t in shorts:
-            _candidate(t, w, b, sc, prices, aum, decisions)
+            _candidate(t, w, b, sc, prices, aum)
 
-    # --- execute approved ---
+    # --- manual override (backstop for the automated Monday run) ---
     st.markdown("---")
-    n_app = sum(1 for v in decisions.values() if v == "approved")
-    n_rej = sum(1 for v in decisions.values() if v == "rejected")
-    st.caption(f"Approved {n_app} · Rejected {n_rej} (rejected names are dropped from the target)")
-    confirm = st.checkbox("I authorize placing PAPER orders")
-    if st.button("Build target & Execute (paper) →", type="primary", disabled=not confirm):
-        from portfolio import construct
+    st.markdown("**Manual override**")
+    from execution import autoexec_state
+    auto_on = autoexec_state.is_enabled()
+    st.caption(
+        f"Trading is automated — the Monday 9:45 ET job is currently "
+        f"{'🟢 ON' if auto_on else '⚪ OFF'} (toggle on the Execution page). Use this only to "
+        "trade off-cycle: a missed Monday, or while auto is off. It places the *current* "
+        "target book (the same one the automation uses), veto- and kill-switch-gated.")
+    if st.button("Preview orders (dry-run)", use_container_width=False):
         from execution import executor
-        keep = {t: wt for t, wt in w.items() if decisions.get(t) != "rejected"}
-        construct.store_target(method, keep, b, sc.assign(score=sc["composite"]))
+        with st.spinner("Pre-trade veto → dry-run…"):
+            st.json(executor.run(dry_run=True))
+    confirm = st.checkbox("I authorize placing PAPER orders now")
+    if st.button("Execute now (manual override) →", type="primary", disabled=not confirm):
+        from execution import executor
         with st.spinner("Pre-trade veto → Alpaca…"):
             st.json(executor.run(dry_run=False))
 
