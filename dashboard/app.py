@@ -31,13 +31,20 @@ auth.require_login()  # gates the app when AUTH_* is configured in .env
 
 NAV = [("I", "PORTFOLIO"), ("II", "RESEARCH"), ("III", "RISK"),
        ("IV", "PERFORMANCE"), ("V", "EXECUTION"), ("VI", "LETTER")]
-try:
-    page = int(st.query_params.get("page", 0))
-except (TypeError, ValueError):
-    page = 0
-page = max(0, min(page, len(NAV) - 1))
+if "page" not in st.session_state:
+    st.session_state.page = 0
 if "jarvis_history" not in st.session_state:
     st.session_state.jarvis_history = []
+
+# Button-based nav: reruns in place (same Streamlit session) instead of a full page
+# reload, so the login/session state — and thus auth — persists across navigation.
+_nc = st.columns(len(NAV))
+for _i, (_rn, _lab) in enumerate(NAV):
+    if _nc[_i].button(f"{_rn}  {_lab}", key=f"nav_{_i}", use_container_width=True,
+                      type="primary" if st.session_state.page == _i else "secondary"):
+        st.session_state.page = _i
+        st.rerun()
+page = st.session_state.page
 
 # auto-refresh during market hours
 now = datetime.now()
@@ -724,10 +731,3 @@ try:
     PAGE_FNS[page]()
 except Exception as e:  # noqa: BLE001
     st.error(f"Page error: {e}")
-
-# fixed bottom pill nav (query-param links — true bottom bar like the reference)
-nav_html = '<div class="navbar">' + "".join(
-    f'<a target="_self" href="?page={i}" class="{"active" if i == page else ""}">'
-    f'<span class="rn">{rn}</span>{label}</a>' for i, (rn, label) in enumerate(NAV)
-) + "</div>"
-st.markdown(nav_html, unsafe_allow_html=True)
