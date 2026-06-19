@@ -23,18 +23,12 @@ import hmac
 import secrets
 import smtplib
 import time
-from datetime import datetime, timedelta
 from email.message import EmailMessage
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from core.config import cfg, env
-
-try:  # cookie writer (set in require_login); reads use st.context.headers and need no dep
-    import extra_streamlit_components as stx
-    _HAS_COOKIES = True
-except Exception:  # noqa: BLE001
-    _HAS_COOKIES = False
 
 _COOKIE = "mhf_device"
 
@@ -106,12 +100,35 @@ def _device_trusted() -> bool:
     return False
 
 
-def _remember_device(cm) -> None:
-    if not (_HAS_COOKIES and cm is not None):
-        return
+def _queue_remember() -> None:
+    """Queue the signed device cookie; it's written next render by _flush_pending_cookie()."""
     days = int(cfg.get("auth.remember_device_days", 30))
-    token = _sign_device(int(time.time()) + days * 86400)
-    cm.set(_COOKIE, token, expires_at=datetime.now() + timedelta(days=days), key="set_device")
+    st.session_state["_pending_cookie"] = _sign_device(int(time.time()) + days * 86400)
+
+
+def _flush_pending_cookie() -> None:
+    """Write a queued device cookie via JS on a normal (non-rerun) render.
+
+    Setting a cookie and immediately calling st.rerun() drops it — the writer never
+    reaches the browser. So we queue on the login run and write on the next render
+    (when the app is showing), which is not followed by an immediate rerun.
+    """
+    tok = st.session_state.pop("_pending_cookie", None)
+    if not tok:
+        return
+    max_age = int(cfg.get("auth.remember_device_days", 30)) * 86400
+    components.html(
+        f"""<script>
+        (function() {{
+          var c = "{_COOKIE}={tok}; max-age={max_age}; path=/; samesite=Lax"
+                  + (location.protocol === 'https:' ? '; secure' : '');
+          for (var w of [window.top, window.parent, window]) {{
+            try {{ w.document.cookie = c; break; }} catch (e) {{}}
+          }}
+        }})();
+        </script>""",
+        height=0,
+    )
 
 
 # --------------------------------------------------------------------------- email OTP
@@ -178,6 +195,8 @@ def _throttle(msg: str) -> None:
 
 def require_login() -> None:
     """Block the app with a login screen until authenticated. No-op if unconfigured."""
+    _flush_pending_cookie()  # write any queued device cookie (runs on this render, incl. while authed)
+
     if not _configured() or st.session_state.get("authed"):
         return
 
@@ -188,7 +207,6 @@ def require_login() -> None:
 
     st.session_state.setdefault("auth_fails", 0)
     st.session_state.setdefault("auth_stage", "creds")
-    cm = stx.CookieManager(key="mhf_cookies") if _HAS_COOKIES else None
     mode = _mfa_mode()
 
     _, mid, _ = st.columns([1, 1.1, 1])
@@ -218,13 +236,13 @@ def require_login() -> None:
                 if mode == "none":
                     st.session_state.authed = True
                     if remember:
-                        _remember_device(cm)
+                        _queue_remember()
                     st.rerun()
                 if mode == "totp":
                     if _totp_ok(code):
                         st.session_state.authed = True
                         if remember:
-                            _remember_device(cm)
+                            _queue_remember()
                         st.rerun()
                     _throttle("Invalid authenticator code.")
                     st.stop()
@@ -255,7 +273,7 @@ def require_login() -> None:
                     st.session_state.authed = True
                     st.session_state.auth_stage = "creds"
                     if st.session_state.get("auth_remember"):
-                        _remember_device(cm)
+                        _queue_remember()
                     st.session_state.pop("otp_hash", None)
                     st.rerun()
                 else:
