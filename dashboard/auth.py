@@ -7,7 +7,7 @@ configure it). Flow:
   2. second factor — emailed one-time code (mfa: email) or authenticator TOTP
      (mfa: totp / fallback when SMTP isn't configured)
   3. optional "remember this device for N days" — sets a *signed* cookie so future
-     sessions on the same browser skip the code (they still ask for the password).
+     sessions on the same browser skip sign-in entirely (both password and code).
 
 The device cookie is read from the request headers (st.context.headers) and written
 with extra_streamlit_components' CookieManager. The cookie value is HMAC-signed with a
@@ -181,6 +181,11 @@ def require_login() -> None:
     if not _configured() or st.session_state.get("authed"):
         return
 
+    # A remembered (trusted) device skips sign-in entirely — no password, no code.
+    if _device_trusted():
+        st.session_state.authed = True
+        return
+
     st.session_state.setdefault("auth_fails", 0)
     st.session_state.setdefault("auth_stage", "creds")
     cm = stx.CookieManager(key="mhf_cookies") if _HAS_COOKIES else None
@@ -200,7 +205,8 @@ def require_login() -> None:
                 code = (st.text_input("Authenticator code", max_chars=6, placeholder="123456")
                         if mode == "totp" else None)
                 remember = st.checkbox(
-                    f"Remember this device for {int(cfg.get('auth.remember_device_days', 30))} days")
+                    f"Remember this device for {int(cfg.get('auth.remember_device_days', 30))} days "
+                    "(skip sign-in on this browser)")
                 ok = st.form_submit_button("Continue", type="primary", use_container_width=True)
             if ok:
                 if not _creds_ok(user, pw):
@@ -208,8 +214,8 @@ def require_login() -> None:
                     st.stop()
                 st.session_state.auth_fails = 0
                 st.session_state.auth_remember = remember
-                # trusted device or no-MFA -> straight in
-                if _device_trusted() or mode == "none":
+                # no second factor configured -> straight in
+                if mode == "none":
                     st.session_state.authed = True
                     if remember:
                         _remember_device(cm)

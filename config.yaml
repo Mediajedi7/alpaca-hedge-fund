@@ -200,7 +200,7 @@ auth:
   mfa: "email"                     # email | totp
   otp_email_to: "tommy@mediajedi.net"
   otp_ttl_minutes: 10              # how long an emailed code stays valid
-  remember_device_days: 30         # "remember this device" skips the OTP (still asks password)
+  remember_device_days: 30         # "remember this device" skips sign-in entirely (login + code)
 
 smtp:
   host: "mail.smtp2go.com"
