@@ -652,7 +652,21 @@ def page_performance():
 
 # ---------------- PAGE V: EXECUTION ----------------
 def page_execution():
-    from execution import costs
+    from execution import autoexec_state, costs
+
+    # Monday auto-execution on/off (no cron editing; state persists across deploys)
+    cur = autoexec_state.is_enabled()
+    tnew = st.toggle(
+        "Monday auto-execution", value=cur,
+        help="ON: the Monday 9:45 ET job auto-places the rebuilt book (veto- and "
+             "kill-switch-gated, sized off live equity) and emails you. OFF: it's paused "
+             "and you execute manually.")
+    if tnew != cur:
+        autoexec_state.set_enabled(tnew)
+        st.rerun()
+    st.caption(("🟢 Auto-execution **ON** — next run Monday 9:45 AM ET."
+                if tnew else "⚪ Auto-execution **OFF** — paused; run manually."))
+
     s = costs.slippage_stats()
     notional30 = _q("SELECT COALESCE(SUM(notional),0) n FROM orders WHERE fill_price IS NOT NULL "
                     "AND ts>=datetime('now','-30 day')").iloc[0]["n"]

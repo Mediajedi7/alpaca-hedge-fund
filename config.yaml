@@ -163,6 +163,8 @@ execution:
   max_retries: 3
   short_check_cache_days: 7
   slippage_window_days: 30
+  auto_execute_enabled: true       # default for the Monday auto-exec; toggled live on the
+                                   # dashboard Execution page (cache/auto_execute.flag overrides)
 
 # -----------------------------------------------------------------------------
 # LAYER 7 — Reporting + Dashboard

@@ -17,7 +17,7 @@ from datetime import date
 
 from core.log import get_logger
 from core.notify import send_email
-from execution import executor
+from execution import autoexec_state, executor
 
 log = get_logger("auto_execute")
 TAG = "[Mediajedi HF]"
@@ -25,6 +25,9 @@ TAG = "[Mediajedi HF]"
 
 def main() -> None:
     when = date.today().isoformat()
+    if not autoexec_state.is_enabled():
+        log.info("auto-execution is OFF (dashboard toggle) — skipping; no orders placed")
+        return
     try:
         summary = executor.run(dry_run=False)
     except Exception as e:  # noqa: BLE001
