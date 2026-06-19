@@ -87,12 +87,13 @@ def page_portfolio():
 
         # live Alpaca paper account: balance + running P&L
         try:
+            from reporting import pnl
             a = _account()
-            start = float(cfg.get("fund.starting_capital", 100_000))
-            day = a["equity"] - a["last_equity"]
-            tot = a["equity"] - start
+            basis = pnl.cost_basis()                       # seed +/- net deposits/withdrawals
+            day = pnl.today_pnl(a["equity"], a["last_equity"])
+            tot = pnl.total_pnl(a["equity"])
             dpct = (day / a["last_equity"] * 100) if a["last_equity"] else 0.0
-            tpct = (a["equity"] / start - 1) * 100 if start else 0.0
+            tpct = (tot / basis * 100) if basis else 0.0
             dcol = theme.LONG if day >= 0 else theme.SHORT
             tcol = theme.LONG if tot >= 0 else theme.SHORT
             st.markdown(
@@ -102,7 +103,7 @@ def page_portfolio():
                 f'<div><div class="al">Today P&amp;L</div><div class="av" style="color:{dcol}">{day:+,.0f}</div>'
                 f'<div class="as" style="color:{dcol}">{dpct:+.2f}%</div></div>'
                 f'<div><div class="al">Total P&amp;L</div><div class="av" style="color:{tcol}">{tot:+,.0f}</div>'
-                f'<div class="as" style="color:{tcol}">{tpct:+.2f}% since ${start:,.0f}</div></div>'
+                f'<div class="as" style="color:{tcol}">{tpct:+.2f}% on ${basis:,.0f} invested</div></div>'
                 '</div>', unsafe_allow_html=True)
         except Exception as e:  # noqa: BLE001
             st.caption(f"Live account data unavailable: {e}")
@@ -655,6 +656,24 @@ def page_performance():
     _kpi(ck[1], "Avg actual slippage", f"{slip['avg_bps']:+.1f} bps", f"over {slip['n']} orders, last 30d",
          theme.SHORT if slip['avg_bps'] > 0 else theme.LONG)
     _kpi(ck[2], "Model error", f"{slip['avg_bps'] - est:+.1f} bps", "actual vs estimate")
+
+    # --- cash flows (deposits / withdrawals) — keep P&L accurate across transfers ---
+    from reporting import pnl
+    with st.expander(f"Cash flows — log a deposit / withdrawal  ·  net so far ${pnl.net_flows():,.0f}"):
+        st.caption("Record money you add to or pull out of the account so Total P&L reflects "
+                   "*strategy performance*, not transfers. (Paper account = mostly for testing now.)")
+        f1, f2, f3 = st.columns([30, 40, 30])
+        kind = f1.selectbox("Type", ["Withdrawal", "Deposit"])
+        amt = f2.number_input("Amount ($)", min_value=0.0, step=500.0, value=0.0)
+        note = f3.text_input("Note", placeholder="optional")
+        if st.button("Record cash flow", disabled=amt <= 0):
+            pnl.record(-amt if kind == "Withdrawal" else amt, note)
+            st.cache_data.clear()
+            st.rerun()
+        hist = pnl.history(10)
+        if hist:
+            st.dataframe(pd.DataFrame(hist).rename(columns={"ts": "when", "amount": "amount ($)"}),
+                         use_container_width=True, hide_index=True)
 
     # win/loss + weekly commentary
     wl = analytics.win_loss()
