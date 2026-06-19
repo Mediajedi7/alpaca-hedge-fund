@@ -9,3 +9,8 @@
 # circuit breakers (size-down/close-all/kill-switch/force-close). PROTECTIVE ONLY —
 # it never opens new positions; portfolio execution stays manual (run_execution.py).
 */5 9-16 * * 1-5 cd /app && python3 -m execution.monitor >> /app/output/logs/monitor.log 2>&1
+#
+# Weekly full refresh: Sunday 18:00 ET (~2h). Deep data (filings/insider/13F) + Claude
+# analysis (PAID, capped) + beta-neutral portfolio rebuild, so the book is fresh Monday
+# morning. NEVER trades — execution stays manual (run_execution.py).
+0 18 * * 0 /app/scripts/weekly_refresh.sh
