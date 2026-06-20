@@ -657,8 +657,27 @@ def page_performance():
          theme.SHORT if slip['avg_bps'] > 0 else theme.LONG)
     _kpi(ck[2], "Model error", f"{slip['avg_bps'] - est:+.1f} bps", "actual vs estimate")
 
-    # --- cash flows (deposits / withdrawals) — keep P&L accurate across transfers ---
+    # --- withdrawable earnings: profit above invested capital, net of the tax reserve ---
     from reporting import pnl
+    try:
+        acct = _account()
+        profit = pnl.total_pnl(acct["equity"])           # equity - cost basis
+        tax_owed = float(tax.get("est_tax", 0.0))         # `tax` computed in the turnover cards above
+        withdrawable = max(0.0, profit - tax_owed)
+        wk = st.columns(3, gap="medium")
+        _kpi(wk[0], "Total profit", f"${profit:,.0f}", "equity − capital invested",
+             theme.LONG if profit >= 0 else theme.SHORT)
+        _kpi(wk[1], "Est. tax reserve", f"${tax_owed:,.0f}", "realized gains YTD")
+        _kpi(wk[2], "Withdrawable earnings", f"${withdrawable:,.0f}",
+             "profit after tax · principal kept", theme.ACCENT)
+        st.caption(f"This is profit you could take while keeping your invested capital "
+                   f"(${pnl.cost_basis():,.0f}) and a tax reserve intact. Actually moving it out "
+                   f"is also capped by settled cash (${acct['cash']:,.0f}) — the book is ~fully "
+                   "invested, so you'd sell to raise cash first.")
+    except Exception as e:  # noqa: BLE001
+        st.caption(f"Withdrawable figure unavailable: {e}")
+
+    # --- cash flows (deposits / withdrawals) — keep P&L accurate across transfers ---
     with st.expander(f"Cash flows — log a deposit / withdrawal  ·  net so far ${pnl.net_flows():,.0f}"):
         st.caption("Record money you add to or pull out of the account so Total P&L reflects "
                    "*strategy performance*, not transfers. (Paper account = mostly for testing now.)")
