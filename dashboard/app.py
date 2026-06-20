@@ -678,7 +678,9 @@ def page_performance():
         st.caption(f"Withdrawable figure unavailable: {e}")
 
     # --- cash flows (deposits / withdrawals) — keep P&L accurate across transfers ---
-    with st.expander(f"Cash flows — log a deposit / withdrawal  ·  net so far ${pnl.net_flows():,.0f}"):
+    st.markdown("---")
+    st.markdown(f"### 💵 Log a deposit / withdrawal &nbsp;·&nbsp; net so far ${pnl.net_flows():,.0f}")
+    with st.container(border=True):
         st.caption("Record money you add to or pull out of the account so Total P&L reflects "
                    "*strategy performance*, not transfers. (Paper account = mostly for testing now.)")
         f1, f2, f3 = st.columns([30, 40, 30])
