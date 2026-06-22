@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import signal
 import sys
+import threading
 
 from core.log import get_logger
 
@@ -16,7 +17,9 @@ class OrderManager:
     def __init__(self, broker, install_sigint: bool = True):
         self.broker = broker
         self.orders: dict[str, dict] = {}  # broker_order_id -> {ticker, status, ...}
-        if install_sigint:
+        # signal handlers only work on the main thread — skip when run from a worker
+        # thread (e.g. the Streamlit dashboard's manual override), where SIGINT isn't ours.
+        if install_sigint and threading.current_thread() is threading.main_thread():
             signal.signal(signal.SIGINT, self._on_sigint)
 
     def register(self, order_id: str, ticker: str, side: str, shares: float) -> None:
