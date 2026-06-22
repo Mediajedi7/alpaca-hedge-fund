@@ -10,7 +10,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import calendar
-from datetime import date, datetime
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -47,13 +47,6 @@ for _i, (_rn, _lab) in enumerate(NAV):
         st.session_state.page = _i
         st.rerun()
 st.divider()
-
-# auto-refresh during market hours
-now = datetime.now()
-if cfg.get("dashboard.market_open", "09:30") <= now.strftime("%H:%M") <= cfg.get("dashboard.market_close", "16:00") \
-        and now.weekday() < 5:
-    st.markdown(f'<meta http-equiv="refresh" content="{cfg.get("dashboard.refresh_secs", 300)}">',
-                unsafe_allow_html=True)
 
 
 def _q(sql, params=()):
