@@ -174,11 +174,19 @@ def run(dry_run: bool = True, max_orders: int | None = None) -> dict:
                      tr.side, tr.shares, tr.ticker, tr.limit_price, tr.signal_price,
                      " [closing]" if tr.is_closing else "")
         else:
-            _execute_trade(broker, om, tr)
+            # Resilient: a single bad symbol/order must not abort the rest of the book
+            # (that once left a partial, unbalanced book). Log, record, and continue.
+            try:
+                _execute_trade(broker, om, tr)
+            except Exception as e:  # noqa: BLE001
+                log.error("order failed for %s (%s) — skipping", tr.ticker, e)
+                skipped.append((tr.ticker, [f"order error: {e}"]))
+                continue
         executed.append(tr.ticker)
 
     summary = {"target": len(target), "veto_rejected": len(screen["rejections"]),
                "trades_planned": len(trades), "executed": len(executed),
-               "dry_run": dry_run, "aggregate": agg, "order_states": om.counts()}
+               "skipped": len(skipped), "dry_run": dry_run, "aggregate": agg,
+               "order_states": om.counts()}
     log.info("Execution summary: %s", summary)
     return summary

@@ -19,6 +19,15 @@ log = get_logger("broker")
 LIVE_CONFIRMATION = "YES I UNDERSTAND THE RISKS"
 
 
+def _to_alpaca(symbol: str) -> str:
+    """Our S&P universe writes class shares with '-' (BRK-B, BF-B); Alpaca uses '.'."""
+    return symbol.replace("-", ".")
+
+
+def _from_alpaca(symbol: str) -> str:
+    return symbol.replace(".", "-")
+
+
 @dataclass
 class Position:
     symbol: str
@@ -70,12 +79,13 @@ class Broker:
     def positions(self) -> dict[str, Position]:
         out = {}
         for p in self._retry(self.client.get_all_positions):
-            out[p.symbol] = Position(p.symbol, float(p.qty), float(p.market_value),
-                                     float(p.unrealized_pl), float(p.avg_entry_price))
+            sym = _from_alpaca(p.symbol)   # map back to our internal symbol
+            out[sym] = Position(sym, float(p.qty), float(p.market_value),
+                                float(p.unrealized_pl), float(p.avg_entry_price))
         return out
 
     def get_asset(self, symbol: str):
-        return self._retry(self.client.get_asset, symbol)
+        return self._retry(self.client.get_asset, _to_alpaca(symbol))
 
     def open_orders(self) -> list:
         from alpaca.trading.enums import QueryOrderStatus
@@ -86,7 +96,7 @@ class Broker:
     # --- orders ---
     def submit_limit(self, symbol: str, qty: float, side: str, limit_price: float):
         req = LimitOrderRequest(
-            symbol=symbol, qty=qty,
+            symbol=_to_alpaca(symbol), qty=qty,
             side=OrderSide.BUY if side == "buy" else OrderSide.SELL,
             time_in_force=TimeInForce.DAY, limit_price=round(limit_price, 2))
         return self._retry(self.client.submit_order, order_data=req)
@@ -102,7 +112,7 @@ class Broker:
 
     def close_position(self, symbol: str) -> None:
         try:
-            self._retry(self.client.close_position, symbol)
+            self._retry(self.client.close_position, _to_alpaca(symbol))
             log.info("closed position %s", symbol)
         except APIError as e:
             log.warning("close_position %s failed: %s", symbol, e)
