@@ -87,6 +87,27 @@ class Broker:
     def get_asset(self, symbol: str):
         return self._retry(self.client.get_asset, _to_alpaca(symbol))
 
+    def latest_prices(self, symbols: list[str]) -> dict[str, float]:
+        """Latest trade price per symbol from Alpaca market data (IEX feed on paper).
+        Returns {our_symbol: price}; missing names are simply absent (caller falls back)."""
+        if not symbols:
+            return {}
+        from alpaca.data.historical import StockHistoricalDataClient
+        from alpaca.data.requests import StockLatestTradeRequest
+        if getattr(self, "_data", None) is None:
+            self._data = StockHistoricalDataClient(env("ALPACA_API_KEY", required=True),
+                                                   env("ALPACA_SECRET_KEY", required=True))
+        amap = {_to_alpaca(s): s for s in symbols}
+        out: dict[str, float] = {}
+        try:
+            res = self._data.get_stock_latest_trade(
+                StockLatestTradeRequest(symbol_or_symbols=list(amap)))
+            for asym, tr in res.items():
+                out[amap.get(asym, _from_alpaca(asym))] = float(tr.price)
+        except Exception as e:  # noqa: BLE001 - caller falls back to last close
+            log.warning("latest_prices failed (%s) — falling back to last close", e)
+        return out
+
     def open_orders(self) -> list:
         from alpaca.trading.enums import QueryOrderStatus
         from alpaca.trading.requests import GetOrdersRequest

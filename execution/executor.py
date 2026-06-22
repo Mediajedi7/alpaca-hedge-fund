@@ -55,16 +55,21 @@ def _load_target() -> dict[str, float]:
 
 
 def plan_trades(target: dict[str, float], broker: Broker, aum: float) -> list[Trade]:
-    """Diff target weights against current positions into buy/sell trades."""
+    """Diff target weights against current positions into buy/sell trades.
+
+    Prices off the LIVE quote (last close only as a fallback) and sets a marketable limit
+    THROUGH the quote, so liquid names fill promptly instead of resting on a stale price.
+    """
     current = broker.positions()
-    offset = float(cfg.get("execution.limit_offset", 0.001))
+    offset = float(cfg.get("execution.marketable_offset", 0.003))
     syms = set(target) | set(current)
     closes = _last_close(list(syms))
+    live = broker.latest_prices(list(syms))  # live quotes; per-name fallback to last close
     cur_shares = {s: p.qty for s, p in current.items()}
 
     trades = []
     for s in sorted(syms):
-        px = closes.get(s)
+        px = live.get(s) or closes.get(s)
         if not px:
             continue
         tgt_shares = round(target.get(s, 0.0) * aum / px)
@@ -74,6 +79,7 @@ def plan_trades(target: dict[str, float], broker: Broker, aum: float) -> list[Tr
             continue
         side = "buy" if delta > 0 else "sell"
         is_closing = (abs(tgt_shares) < abs(cur_q) and tgt_shares * cur_q >= 0) or tgt_shares == 0
+        # marketable: cross the live quote so the order fills, capped at `offset`
         limit = px * (1 + offset) if side == "buy" else px * (1 - offset)
         trades.append(Trade(s, side, abs(delta), px, limit, is_closing, target.get(s, 0.0)))
     return trades
