@@ -125,6 +125,23 @@ h1,h2,h3,h4 {{ font-family: '{SANS}', sans-serif; font-weight: 800; color: #f3f5
 .acct .av {{ font-size: 26px; font-weight: 800; color: #f3f5fb; font-family: '{MONO}', monospace;
             margin-top: 5px; line-height: 1; }}
 .acct .as {{ font-size: 11px; color: #8a93ad; margin-top: 4px; }}
+/* ---- responsive nav + mobile sizing ---- */
+.mobile-nav-anchor, .desktop-nav-anchor {{ display: none; }}
+/* desktop: hamburger hidden (both the trigger and its container, so no empty gap) */
+[data-testid="stPopover"] {{ display: none; }}
+[data-testid="stElementContainer"]:has([data-testid="stPopover"]) {{ display: none; }}
+@media (max-width: 768px) {{
+  /* mobile: show the hamburger, hide the desktop tab-bar columns row */
+  [data-testid="stPopover"] {{ display: block !important; }}
+  [data-testid="stElementContainer"]:has([data-testid="stPopover"]) {{ display: block !important; }}
+  [data-testid="stElementContainer"]:has(.desktop-nav-anchor) + [data-testid="stHorizontalBlock"],
+  [data-testid="stElementContainer"]:has(.desktop-nav-anchor) + [data-testid="stElementContainer"]:has([data-testid="stHorizontalBlock"]) {{ display: none !important; }}
+  /* width / sizing tweaks for small screens */
+  .jarvis {{ font-size: 46px !important; }}
+  .block-container, .stMainBlockContainer {{ padding-left: .8rem !important; padding-right: .8rem !important; }}
+  .mgrid {{ grid-template-columns: repeat(3, 1fr) !important; }}
+  .acct {{ flex-direction: column !important; }}
+}}
 </style>
 """
 

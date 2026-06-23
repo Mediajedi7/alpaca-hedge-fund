@@ -38,8 +38,18 @@ if "jarvis_history" not in st.session_state:
 
 page = st.session_state.page
 
-# Tab-bar nav at the top, divider beneath it. Button-based (reruns in place, same
-# Streamlit session), so login/auth persists across navigation — no page reload.
+# Nav: tab-bar on desktop, hamburger dropdown on mobile (CSS swaps them by viewport width;
+# see theme.css @media). Both are button-based so login/auth persists (reruns in place).
+# --- mobile hamburger (hidden on desktop via CSS) ---
+st.markdown('<div class="mobile-nav-anchor"></div>', unsafe_allow_html=True)
+with st.popover(f"☰  {NAV[page][0]}  {NAV[page][1]}", use_container_width=True):
+    for _i, (_rn, _lab) in enumerate(NAV):
+        if st.button(f"{_rn}  {_lab}", key=f"mnav_{_i}", use_container_width=True,
+                     type="primary" if page == _i else "secondary"):
+            st.session_state.page = _i
+            st.rerun()
+# --- desktop tab bar (hidden on mobile via CSS) ---
+st.markdown('<div class="desktop-nav-anchor"></div>', unsafe_allow_html=True)
 _nc = st.columns(len(NAV))
 for _i, (_rn, _lab) in enumerate(NAV):
     if _nc[_i].button(f"{_rn}  {_lab}", key=f"nav_{_i}", use_container_width=True,
