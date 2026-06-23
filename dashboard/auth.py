@@ -21,9 +21,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
-import smtplib
 import time
-from email.message import EmailMessage
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -133,32 +131,20 @@ def _flush_pending_cookie() -> None:
 
 # --------------------------------------------------------------------------- email OTP
 def _send_otp(code: str) -> bool:
-    host = cfg.get("smtp.host", "mail.smtp2go.com")
-    port = int(cfg.get("smtp.port", 2525))
-    user = cfg.get("smtp.user", "")
-    sender = cfg.get("smtp.from", user)
-    to = cfg.get("auth.otp_email_to", "")
+    from core.notify import html_email, send_email
     ttl = int(cfg.get("auth.otp_ttl_minutes", 10))
-    pw = env("SMTP_PASSWORD")
-    if not (pw and to and user):
-        return False
-    msg = EmailMessage()
-    msg["Subject"] = f"Mediajedi Hedge Fund sign-in code: {code}"
-    msg["From"] = sender
-    msg["To"] = to
-    msg.set_content(
-        f"Your JARVIS one-time sign-in code is:\n\n    {code}\n\n"
-        f"It expires in {ttl} minutes. If you didn't try to sign in, ignore this email "
-        "and consider changing the dashboard password."
-    )
-    try:
-        with smtplib.SMTP(host, port, timeout=15) as s:
-            s.starttls()
-            s.login(user, pw)
-            s.send_message(msg)
-        return True
-    except Exception:  # noqa: BLE001
-        return False
+    inner = (
+        "<p>Your one-time sign-in code is:</p>"
+        "<div class='stats-grid'><div class='stat-cell' style='text-align:center'>"
+        f"<div class='stat-value' style='font-size:32px;letter-spacing:6px;color:#1a1a2e'>{code}</div>"
+        "</div></div>"
+        f"<p>It expires in {ttl} minutes. If you didn't try to sign in, ignore this email "
+        "and consider changing the dashboard password.</p>")
+    return send_email(
+        f"Mediajedi Hedge Fund sign-in code: {code}",
+        f"Your JARVIS one-time sign-in code is {code}. It expires in {ttl} minutes.",
+        to=cfg.get("auth.otp_email_to") or None,
+        html=html_email("Sign-in code", inner, banner=""))
 
 
 def _issue_otp() -> bool:
