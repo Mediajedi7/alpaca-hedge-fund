@@ -89,9 +89,9 @@ def build() -> tuple[str, str, str]:
         <div class="stat-cell"><div class="stat-label">Net</div><div class="stat-value">{(net/eq if eq else 0):+.1%}</div><div class="stat-sub">market exposure</div></div>
         <div class="stat-cell"><div class="stat-label">Net beta</div><div class="stat-value">{nbeta:+.2f}</div><div class="stat-sub">unrealized {upl:+,.0f}</div></div>
       </div>
-      {_commentary_html()}
       <h2>Top winners</h2>{_movers_table(winners)}
       <h2>Top losers</h2>{_movers_table(losers)}
+      {_commentary_html()}
     """
     html = html_email("Mediajedi Hedge Fund — Daily Report", inner, subtitle=today)
 
