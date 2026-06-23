@@ -19,3 +19,7 @@
 # through the executor — veto- and kill-switch-gated, sized off LIVE equity — and emails
 # a confirmation (or the reason it declined). This is the ONLY job that OPENS positions.
 45 9 * * 1 cd /app && python3 -m scripts.auto_execute >> /app/output/logs/auto_execute.log 2>&1
+#
+# Daily report email: weekdays 17:00 ET (after close). Styled HTML recap — balance,
+# today's P&L, book exposure, top movers. Read-only; never trades.
+0 17 * * 1-5 cd /app && python3 -m scripts.daily_report >> /app/output/logs/daily_report.log 2>&1

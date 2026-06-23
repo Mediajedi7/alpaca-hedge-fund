@@ -15,7 +15,9 @@ from core.log import get_logger
 log = get_logger("notify")
 
 
-def send_email(subject: str, body: str, to: str | None = None) -> bool:
+def send_email(subject: str, body: str, to: str | None = None, html: str | None = None) -> bool:
+    """Send an email. If `html` is given, send a multipart/alternative (plain `body` +
+    HTML), so clients show the styled version and `body` is the text fallback."""
     host = cfg.get("smtp.host", "mail.smtp2go.com")
     port = int(cfg.get("smtp.port", 2525))
     user = cfg.get("smtp.user", "")
@@ -30,6 +32,8 @@ def send_email(subject: str, body: str, to: str | None = None) -> bool:
     msg["From"] = sender
     msg["To"] = to
     msg.set_content(body)
+    if html:
+        msg.add_alternative(html, subtype="html")
     try:
         with smtplib.SMTP(host, port, timeout=20) as s:
             s.starttls()
