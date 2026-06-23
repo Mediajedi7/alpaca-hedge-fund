@@ -126,16 +126,17 @@ h1,h2,h3,h4 {{ font-family: '{SANS}', sans-serif; font-weight: 800; color: #f3f5
             margin-top: 5px; line-height: 1; }}
 .acct .as {{ font-size: 11px; color: #8a93ad; margin-top: 4px; }}
 /* ---- responsive nav + mobile sizing ---- */
-.mobile-nav-anchor, .desktop-nav-anchor {{ display: none; }}
-/* desktop: hamburger hidden (both the trigger and its container, so no empty gap) */
-[data-testid="stPopover"] {{ display: none; }}
-[data-testid="stElementContainer"]:has([data-testid="stPopover"]) {{ display: none; }}
+/* desktop: hide the mobile hamburger + its collapsible menu (keyed widgets) */
+.st-key-nav_hamburger,
+.st-key-mnav_0, .st-key-mnav_1, .st-key-mnav_2,
+.st-key-mnav_3, .st-key-mnav_4, .st-key-mnav_5 {{ display: none; }}
 @media (max-width: 768px) {{
-  /* mobile: show the hamburger, hide the desktop tab-bar columns row */
-  [data-testid="stPopover"] {{ display: block !important; }}
-  [data-testid="stElementContainer"]:has([data-testid="stPopover"]) {{ display: block !important; }}
-  [data-testid="stElementContainer"]:has(.desktop-nav-anchor) + [data-testid="stHorizontalBlock"],
-  [data-testid="stElementContainer"]:has(.desktop-nav-anchor) + [data-testid="stElementContainer"]:has([data-testid="stHorizontalBlock"]) {{ display: none !important; }}
+  /* mobile: show the hamburger + menu, hide the desktop tab-bar buttons */
+  .st-key-nav_hamburger,
+  .st-key-mnav_0, .st-key-mnav_1, .st-key-mnav_2,
+  .st-key-mnav_3, .st-key-mnav_4, .st-key-mnav_5 {{ display: block !important; }}
+  .st-key-nav_0, .st-key-nav_1, .st-key-nav_2,
+  .st-key-nav_3, .st-key-nav_4, .st-key-nav_5 {{ display: none !important; }}
   /* width / sizing tweaks for small screens */
   .jarvis {{ font-size: 46px !important; }}
   .block-container, .stMainBlockContainer {{ padding-left: .8rem !important; padding-right: .8rem !important; }}

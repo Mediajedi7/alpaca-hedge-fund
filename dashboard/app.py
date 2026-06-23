@@ -37,23 +37,28 @@ if "jarvis_history" not in st.session_state:
     st.session_state.jarvis_history = []
 
 page = st.session_state.page
+st.session_state.setdefault("nav_open", False)
 
-# Nav: tab-bar on desktop, hamburger dropdown on mobile (CSS swaps them by viewport width;
-# see theme.css @media). Both are button-based so login/auth persists (reruns in place).
-# --- mobile hamburger (hidden on desktop via CSS) ---
-st.markdown('<div class="mobile-nav-anchor"></div>', unsafe_allow_html=True)
-with st.popover(f"☰  {NAV[page][0]}  {NAV[page][1]}", use_container_width=True):
+# Nav: tab bar on desktop, collapsible hamburger on mobile. CSS swaps them by viewport
+# using the per-key `.st-key-*` classes Streamlit adds (see theme.css @media). Both are
+# button-based so auth/session persists; the mobile menu's open state is in session_state,
+# so picking a page sets it AND collapses the menu.
+# --- mobile hamburger + collapsible menu (hidden on desktop via CSS) ---
+if st.button(f"☰  {NAV[page][0]}  {NAV[page][1]}", key="nav_hamburger", use_container_width=True):
+    st.session_state.nav_open = not st.session_state.nav_open
+    st.rerun()
+if st.session_state.nav_open:
     for _i, (_rn, _lab) in enumerate(NAV):
         if st.button(f"{_rn}  {_lab}", key=f"mnav_{_i}", use_container_width=True,
                      type="primary" if page == _i else "secondary"):
             st.session_state.page = _i
+            st.session_state.nav_open = False   # collapse on selection
             st.rerun()
 # --- desktop tab bar (hidden on mobile via CSS) ---
-st.markdown('<div class="desktop-nav-anchor"></div>', unsafe_allow_html=True)
 _nc = st.columns(len(NAV))
 for _i, (_rn, _lab) in enumerate(NAV):
     if _nc[_i].button(f"{_rn}  {_lab}", key=f"nav_{_i}", use_container_width=True,
-                      type="primary" if st.session_state.page == _i else "secondary"):
+                      type="primary" if page == _i else "secondary"):
         st.session_state.page = _i
         st.rerun()
 st.divider()
