@@ -131,12 +131,18 @@ h1,h2,h3,h4 {{ font-family: '{SANS}', sans-serif; font-weight: 800; color: #f3f5
 .st-key-mnav_0, .st-key-mnav_1, .st-key-mnav_2,
 .st-key-mnav_3, .st-key-mnav_4, .st-key-mnav_5 {{ display: none; }}
 @media (max-width: 768px) {{
-  /* mobile: show the hamburger + menu, hide the desktop tab-bar buttons */
+  /* mobile: show the hamburger + menu */
   .st-key-nav_hamburger,
   .st-key-mnav_0, .st-key-mnav_1, .st-key-mnav_2,
   .st-key-mnav_3, .st-key-mnav_4, .st-key-mnav_5 {{ display: block !important; }}
-  .st-key-nav_0, .st-key-nav_1, .st-key-nav_2,
-  .st-key-nav_3, .st-key-nav_4, .st-key-nav_5 {{ display: none !important; }}
+  /* hide the WHOLE desktop tab-bar row (not just buttons) so it leaves no empty gap */
+  [data-testid="stHorizontalBlock"]:has(.st-key-nav_0) {{ display: none !important; }}
+  /* stack every column full-width so nothing overflows sideways */
+  [data-testid="stHorizontalBlock"] {{ flex-wrap: wrap !important; }}
+  [data-testid="stHorizontalBlock"] > div {{ flex: 1 1 100% !important; min-width: 100% !important; width: 100% !important; }}
+  /* belt-and-suspenders: kill page-level horizontal scroll; charts/tables fit width */
+  [data-testid="stAppViewContainer"], .stMainBlockContainer, .block-container {{ overflow-x: hidden !important; }}
+  .stPlotlyChart, .js-plotly-plot, [data-testid="stDataFrame"] {{ max-width: 100% !important; }}
   /* width / sizing tweaks for small screens */
   .jarvis {{ font-size: 46px !important; }}
   .block-container, .stMainBlockContainer {{ padding-left: .8rem !important; padding-right: .8rem !important; }}

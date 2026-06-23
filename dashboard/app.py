@@ -44,7 +44,9 @@ st.session_state.setdefault("nav_open", False)
 # button-based so auth/session persists; the mobile menu's open state is in session_state,
 # so picking a page sets it AND collapses the menu.
 # --- mobile hamburger + collapsible menu (hidden on desktop via CSS) ---
-if st.button(f"☰  {NAV[page][0]}  {NAV[page][1]}", key="nav_hamburger", use_container_width=True):
+_caret = "▴" if st.session_state.nav_open else "▾"
+if st.button(f"☰  {NAV[page][0]}  {NAV[page][1]}   {_caret}", key="nav_hamburger",
+             use_container_width=True):
     st.session_state.nav_open = not st.session_state.nav_open
     st.rerun()
 if st.session_state.nav_open:
