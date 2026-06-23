@@ -87,25 +87,50 @@ class Broker:
     def get_asset(self, symbol: str):
         return self._retry(self.client.get_asset, _to_alpaca(symbol))
 
+    def _data_client(self):
+        if getattr(self, "_data", None) is None:
+            from alpaca.data.historical import StockHistoricalDataClient
+            self._data = StockHistoricalDataClient(env("ALPACA_API_KEY", required=True),
+                                                   env("ALPACA_SECRET_KEY", required=True))
+        return self._data
+
     def latest_prices(self, symbols: list[str]) -> dict[str, float]:
         """Latest trade price per symbol from Alpaca market data (IEX feed on paper).
         Returns {our_symbol: price}; missing names are simply absent (caller falls back)."""
         if not symbols:
             return {}
-        from alpaca.data.historical import StockHistoricalDataClient
         from alpaca.data.requests import StockLatestTradeRequest
-        if getattr(self, "_data", None) is None:
-            self._data = StockHistoricalDataClient(env("ALPACA_API_KEY", required=True),
-                                                   env("ALPACA_SECRET_KEY", required=True))
         amap = {_to_alpaca(s): s for s in symbols}
         out: dict[str, float] = {}
         try:
-            res = self._data.get_stock_latest_trade(
+            res = self._data_client().get_stock_latest_trade(
                 StockLatestTradeRequest(symbol_or_symbols=list(amap)))
             for asym, tr in res.items():
                 out[amap.get(asym, _from_alpaca(asym))] = float(tr.price)
         except Exception as e:  # noqa: BLE001 - caller falls back to last close
             log.warning("latest_prices failed (%s) — falling back to last close", e)
+        return out
+
+    def latest_quotes(self, symbols: list[str]) -> dict[str, tuple[float, float]]:
+        """Latest NBBO bid/ask per symbol from Alpaca market data (IEX feed on paper).
+        Returns {our_symbol: (bid, ask)}; a name is OMITTED (caller falls back to the last
+        trade) if it has no two-sided quote or an implausibly wide spread — off-hours IEX
+        quotes can be 10%+ wide and would otherwise produce nonsensical limits."""
+        if not symbols:
+            return {}
+        from alpaca.data.requests import StockLatestQuoteRequest
+        max_spread = float(cfg.get("execution.max_quote_spread", 0.02))
+        amap = {_to_alpaca(s): s for s in symbols}
+        out: dict[str, tuple[float, float]] = {}
+        try:
+            res = self._data_client().get_stock_latest_quote(
+                StockLatestQuoteRequest(symbol_or_symbols=list(amap)))
+            for asym, q in res.items():
+                bid, ask = float(q.bid_price), float(q.ask_price)
+                if bid > 0 and ask >= bid and (ask - bid) / ((bid + ask) / 2.0) <= max_spread:
+                    out[amap.get(asym, _from_alpaca(asym))] = (bid, ask)
+        except Exception as e:  # noqa: BLE001 - caller falls back to last trade
+            log.warning("latest_quotes failed (%s) — falling back to last trade", e)
         return out
 
     def open_orders(self) -> list:

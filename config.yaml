@@ -158,7 +158,9 @@ risk:
 # -----------------------------------------------------------------------------
 execution:
   limit_offset: 0.001              # (legacy) close * (1 +/- 0.001)
-  marketable_offset: 0.003         # limit set this far THROUGH the LIVE quote so liquid names fill
+  quote_cross_buffer: 0.001        # buy through the ASK / sell through the BID by this much (primary)
+  max_quote_spread: 0.02           # ignore NBBO quotes wider than this (stale/off-hours) -> use last trade
+  marketable_offset: 0.003         # fallback: mark this far through the last trade when no NBBO quote
   chunk_threshold_pct_adv: 0.02    # chunk orders larger than 2% ADV
   time_in_force_secs: 120
   poll_interval_secs: 5

@@ -61,27 +61,35 @@ def plan_trades(target: dict[str, float], broker: Broker, aum: float) -> list[Tr
     THROUGH the quote, so liquid names fill promptly instead of resting on a stale price.
     """
     current = broker.positions()
-    offset = float(cfg.get("execution.marketable_offset", 0.003))
+    buffer = float(cfg.get("execution.quote_cross_buffer", 0.001))   # cross the NBBO quote
+    offset = float(cfg.get("execution.marketable_offset", 0.003))    # last-trade fallback
     syms = set(target) | set(current)
-    closes = _last_close(list(syms))
-    live = broker.latest_prices(list(syms))  # live quotes; per-name fallback to last close
+    quotes = broker.latest_quotes(list(syms))   # {sym: (bid, ask)} — primary
+    last = broker.latest_prices(list(syms))     # last trade — fallback
+    closes = _last_close(list(syms))            # daily close — last resort
     cur_shares = {s: p.qty for s, p in current.items()}
 
     trades = []
     for s in sorted(syms):
-        px = live.get(s) or closes.get(s)
-        if not px:
+        q = quotes.get(s)
+        # reference (mid) for sizing + slippage signal: best available
+        ref = (q[0] + q[1]) / 2.0 if q else (last.get(s) or closes.get(s))
+        if not ref:
             continue
-        tgt_shares = round(target.get(s, 0.0) * aum / px)
+        tgt_shares = round(target.get(s, 0.0) * aum / ref)
         cur_q = cur_shares.get(s, 0.0)
         delta = tgt_shares - cur_q
         if abs(delta) < 1:
             continue
         side = "buy" if delta > 0 else "sell"
         is_closing = (abs(tgt_shares) < abs(cur_q) and tgt_shares * cur_q >= 0) or tgt_shares == 0
-        # marketable: cross the live quote so the order fills, capped at `offset`
-        limit = px * (1 + offset) if side == "buy" else px * (1 - offset)
-        trades.append(Trade(s, side, abs(delta), px, limit, is_closing, target.get(s, 0.0)))
+        # Buy through the ask / sell through the bid (small buffer past the touch). With no
+        # two-sided quote, mark through the last trade by the wider marketable offset.
+        if q:
+            limit = q[1] * (1 + buffer) if side == "buy" else q[0] * (1 - buffer)
+        else:
+            limit = ref * (1 + offset) if side == "buy" else ref * (1 - offset)
+        trades.append(Trade(s, side, abs(delta), ref, limit, is_closing, target.get(s, 0.0)))
     return trades
 
 
