@@ -63,6 +63,38 @@ def metrics() -> dict:
     }
 
 
+def _live_book() -> dict:
+    """Live Alpaca account + ACTUAL positions (best-effort; {} if the broker is unreachable).
+    Source of truth for current holdings/performance — distinct from the intended target_book."""
+    try:
+        from execution.broker import Broker
+        from portfolio import inputs
+        from reporting import pnl
+        b = Broker()
+        a = b.account()
+        pos = b.positions()
+        eq, le = float(a.equity), float(a.last_equity)
+        betas = inputs.betas(list(pos))
+        gross = sum(abs(p.market_value) for p in pos.values())
+        net = sum(p.market_value for p in pos.values())
+        nbeta = sum((p.market_value / eq) * betas.get(s, 1.0) for s, p in pos.items()) if eq else 0.0
+        return {
+            "equity": round(eq, 2), "cash": round(float(a.cash), 2),
+            "today_pnl": round(pnl.today_pnl(eq, le), 2),
+            "total_pnl": round(pnl.total_pnl(eq), 2),
+            "positions_held": len(pos),
+            "n_long": sum(1 for p in pos.values() if p.qty > 0),
+            "n_short": sum(1 for p in pos.values() if p.qty < 0),
+            "gross_exposure_x": round(gross / eq, 3) if eq else None,
+            "net_exposure": round(net / eq, 4) if eq else None,
+            "net_beta": round(nbeta, 4),
+            "unrealized_pnl": round(sum(p.unrealized_pl for p in pos.values()), 2),
+        }
+    except Exception as e:  # noqa: BLE001
+        log.warning("live book unavailable for snapshot: %s", e)
+        return {}
+
+
 def snapshot() -> dict:
     """~system-state snapshot used as cached Claude context."""
     r = _one("SELECT MAX(asof_date) c FROM scores")
@@ -80,10 +112,11 @@ def snapshot() -> dict:
     return {
         "as_of": datetime.now().isoformat(),
         "fund": cfg.get("fund.name"),
+        "live": _live_book(),                      # ACTUAL account + holdings — source of truth
         "metrics": metrics(),
         "top_longs": [dict(r) for r in top],
         "top_shorts": [dict(r) for r in bot],
-        "target_book": [dict(r) for r in book],
+        "target_book": [dict(r) for r in book],    # INTENDED book; may differ from live
     }
 
 
@@ -112,9 +145,13 @@ def lp_letter(for_date: str | None = None, regenerate: bool = False) -> str:
     sys = PERSONA + "\n\nSNAPSHOT:\n" + snap
     user = (
         "Write today's Daily Investors' Letter as 3-4 short paragraphs. Open with "
-        "'Dear Investors,'. Cover: portfolio posture (long/short, gross/net), the "
-        "day's notable positioning and any risk flags, and a measured outlook. Institutional, "
-        "calm, specific. Do NOT include letterhead or signature — the document frame adds those."
+        "'Dear Investors,'. Use the snapshot's `live` block as the SOURCE OF TRUTH for "
+        "current holdings and performance: the number of positions held, gross/net exposure, "
+        "net beta, and P&L all come from `live` (`target_book` is the intended book and may "
+        "differ — do not quote it as actual holdings). Cover: portfolio posture (long/short, "
+        "gross/net), the day's notable positioning and any risk flags, and a measured outlook. "
+        "Institutional, calm, specific. Do NOT include letterhead or signature — the document "
+        "frame adds those."
     )
     content = _client().complete(sys, user, max_tokens=1400)
     with get_conn() as conn:
