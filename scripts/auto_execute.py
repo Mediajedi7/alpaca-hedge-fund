@@ -15,6 +15,8 @@ from __future__ import annotations
 import json
 from datetime import date
 
+from core.config import cfg
+from core.db import get_conn
 from core.log import get_logger
 from core.notify import send_email
 from execution import autoexec_state, executor
@@ -23,11 +25,34 @@ log = get_logger("auto_execute")
 TAG = "[Mediajedi HF]"
 
 
+def _stale_warning() -> str | None:
+    """Warn if the target book is older than the normal weekend gap — i.e. the Sunday
+    refresh likely didn't run. A Friday-dated book on Monday (~3 days) is normal; a book
+    older than stale_book_max_days means a refresh cycle was missed."""
+    with get_conn() as c:
+        row = c.execute("SELECT MAX(asof_date) d FROM target_portfolio").fetchone()
+    asof = row["d"] if row else None
+    if not asof:
+        return "no target book found in the database"
+    try:
+        age = (date.today() - date.fromisoformat(asof)).days
+    except (ValueError, TypeError):
+        return None
+    limit = int(cfg.get("execution.stale_book_max_days", 4))
+    if age > limit:
+        return (f"book is {age} calendar days old (asof {asof}) — the weekly refresh may "
+                "not have run, so this data is STALE")
+    return None
+
+
 def main() -> None:
     when = date.today().isoformat()
     if not autoexec_state.is_enabled():
         log.info("auto-execution is OFF (dashboard toggle) — skipping; no orders placed")
         return
+    stale = _stale_warning()  # flagged in the confirmation email below; we still trade
+    if stale:
+        log.warning("stale-data guard: %s", stale)
     try:
         summary = executor.run(dry_run=False)
     except Exception as e:  # noqa: BLE001
@@ -51,7 +76,8 @@ def main() -> None:
         return
 
     agg = summary.get("aggregate", {})
-    body = (
+    warn = f"⚠ TRADED ON STALE DATA — {stale}\n\n" if stale else ""
+    body = warn + (
         f"Monday auto-execution complete ({when}).\n\n"
         f"Orders placed:   {summary.get('executed')}\n"
         f"Target names:    {summary.get('target')}\n"
@@ -62,7 +88,10 @@ def main() -> None:
         "Sizing is a % of live account equity, within the veto caps. Review fills on the "
         "dashboard (Execution / Performance). The 5-min risk monitor manages it intraday."
     )
-    send_email(f"{TAG} {when} — executed {summary.get('executed')} orders", body)
+    subject = f"{TAG} {when} — executed {summary.get('executed')} orders"
+    if stale:
+        subject += " ⚠ STALE"
+    send_email(subject, body)
     log.info("executed + emailed: %s", summary)
 
 

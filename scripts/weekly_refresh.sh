@@ -8,11 +8,50 @@
 #   3. run_portfolio.py   rebuild the beta-neutral MVO target book.
 #
 # Execution stays MANUAL — this job never places trades. Review + execute Monday.
-set -e
+#
+# On ANY failure (e.g. the NAS rebooted mid-run, as happened 2026-06-21) it emails an
+# alert so a half-finished refresh doesn't silently leave a stale book for Monday.
 cd /app
 LOG=/app/output/logs/weekly_refresh.log
-echo "===== weekly refresh START $(date '+%Y-%m-%d %H:%M:%S %Z') =====" >> "$LOG"
+STEP="startup"
+
+# notify <subject> <body> — best-effort; never aborts the script (send_email returns bool)
+notify() {
+    python3 -c "import sys; from core.notify import send_email; send_email(sys.argv[1], sys.argv[2])" \
+        "$1" "$2" >> "$LOG" 2>&1
+}
+
+on_exit() {
+    code=$?
+    if [ "$code" -ne 0 ]; then
+        echo "===== weekly refresh FAILED at [$STEP] (exit $code) $(date '+%F %T %Z') =====" >> "$LOG"
+        notify "[Mediajedi HF] Weekly refresh FAILED — book NOT rebuilt" \
+"The Sunday weekly refresh did NOT finish.
+
+Failed step : $STEP (exit code $code)
+Consequence : the target book was NOT rebuilt, so Monday's auto-execution may trade on
+              STALE data (the Monday job also warns if the book is too old).
+
+Check output/logs/weekly_refresh.log on the NAS, then re-run scripts/weekly_refresh.sh."
+    fi
+}
+trap on_exit EXIT
+
+set -e
+echo "===== weekly refresh START $(date '+%F %T %Z') =====" >> "$LOG"
+STEP="run_scoring (data refresh + score)"
 python3 run_scoring.py   >> "$LOG" 2>&1
+STEP="run_analysis (Claude overlay)"
 python3 run_analysis.py  >> "$LOG" 2>&1
+STEP="run_portfolio (rebuild book)"
 python3 run_portfolio.py >> "$LOG" 2>&1
-echo "===== weekly refresh DONE  $(date '+%Y-%m-%d %H:%M:%S %Z') =====" >> "$LOG"
+STEP="done"
+echo "===== weekly refresh DONE  $(date '+%F %T %Z') =====" >> "$LOG"
+
+notify "[Mediajedi HF] Weekly refresh complete — book rebuilt for Monday" \
+"The Sunday weekly refresh finished cleanly:
+  - full data refresh (filings / insider / 13F)
+  - Claude analysis overlay
+  - beta-neutral target book rebuilt
+
+Monday's auto-execution will trade the fresh book."
