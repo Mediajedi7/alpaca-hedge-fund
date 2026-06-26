@@ -1,6 +1,10 @@
 # Mediajedi Hedge Fund — supercronic schedule (TZ=America/New_York)
 # min hour dom mon dow   command
 #
+# Every 5 min — pull latest code from GitHub (auto-deploy). Push from any Claude session
+# (incl. phone) and the NAS picks it up; .env and the database stay local (gitignored).
+*/5 * * * * cd /app && git config --global --add safe.directory /app 2>/dev/null; git pull --ff-only >> /app/output/logs/git_pull.log 2>&1
+#
 # Daily scoring: weekdays 17:15 ET. Refreshes prices, short interest, analyst
 # estimates, earnings calendar, then re-scores all factors (~10-40 min).
 15 17 * * 1-5 cd /app && python3 run_scoring.py --no-filings --no-13f >> /app/output/logs/scoring.log 2>&1

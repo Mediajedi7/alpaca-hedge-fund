@@ -42,5 +42,7 @@ services:
       --server.port 8502
       --server.address 0.0.0.0
       --server.headless true
+      --server.runOnSave true
+      --server.fileWatcherType poll
     ports:
       - "8502:8502"

@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 # supercronic — Docker-friendly cron daemon (runs the daily scoring job)
 ENV SUPERCRONIC_VERSION=0.2.29
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates procps \
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates procps git \
     && curl -fsSL \
        "https://github.com/aptible/supercronic/releases/download/v${SUPERCRONIC_VERSION}/supercronic-linux-amd64" \
        -o /usr/local/bin/supercronic \
