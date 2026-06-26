@@ -134,21 +134,18 @@ The macOS launchd plist in the original prompt is SUPERSEDED by the container's 
   `/volume2/Docker/AlpacaHedgeFund` → mounted `/app`. Helper: `./nas.sh "<cmd>"`.
 - Container `alpaca-hedge-fund` (supercronic scheduler, running) + future
   `alpaca-hedge-fund-dashboard` (Streamlit :8502, **LAN-only, never port-forward**).
-- **Deploy = rsync the working tree, then run in-container.** The rsync needs these
-  exact opts (NAS quirks): absolute key path, `--rsync-path=/usr/bin/rsync`,
-  `IdentitiesOnly=yes` (else SSH falls back to password and fails):
-  ```
-  rsync -az --rsync-path=/usr/bin/rsync \
-    -e "ssh -i /Users/tommy/.ssh/claude_nas -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no" \
-    --exclude '.git' --exclude 'cache' --exclude 'output' --exclude '__pycache__' --exclude '.DS_Store' --exclude '.venv' --exclude '.env' \
-    ./ admin@10.0.1.6:/volume2/Docker/AlpacaHedgeFund/
-  ```
-  ⚠️ ALWAYS `--exclude '.env'` — the NAS `.env` is authoritative (holds secrets + the
-  dashboard AUTH_* login creds set via `setup_auth`). Syncing the local `.env` over it
-  wipes NAS-only edits (this silently disabled dashboard auth once).
+- **Deploy = `git push`.** The NAS dir is a git clone of the repo; the `*/5` cron runs
+  `git pull --ff-only`, so any pushed commit auto-deploys within ~5 min (push from any
+  Claude session, incl. phone). Scripts run fresh per cron so they pick up new code; the
+  dashboard runs with `--server.runOnSave` so it reloads app/theme changes on pull.
+  For an immediate pull: `./nas.sh "docker exec alpaca-hedge-fund sh -c 'cd /app && git pull --ff-only'"`.
+- ⚠️ `.env` and `cache/` (the ~3.2 GB DB) are gitignored and live ONLY on the NAS — never
+  committed, never overwritten by a pull. The NAS `.env` is authoritative (secrets +
+  dashboard AUTH_* creds).
+- **Still needs a manual step** (not covered by auto-pull):
+  - `requirements.txt` or `Dockerfile` change → rebuild: `./nas.sh "cd /volume2/Docker/AlpacaHedgeFund && docker compose build fund && docker compose up -d"`.
+  - `crontab` or `docker-compose.yml` change → recreate so supercronic/compose reload: `docker compose up -d`.
 - Test fast against the running container: `./nas.sh "docker exec alpaca-hedge-fund sh -c 'cd /app && python3 -m data.<module> AAPL'"`.
-- Rebuild image only when `requirements.txt` changes:
-  `./nas.sh "cd /volume2/Docker/AlpacaHedgeFund && docker compose build fund"`.
 - **Cron caveat:** `crontab` runs `run_scoring.py --no-filings --no-13f` weekdays 17:15 ET,
   which doesn't exist until Layer 2 — it errors nightly until then (harmless). Optionally
   point it at `run_data.py --no-filings --no-13f` in the meantime.
