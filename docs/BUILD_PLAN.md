@@ -1,4 +1,4 @@
-# Meridian Capital Partners — 7-Layer Build Plan
+# Mediajedi Hedge Fund — 7-Layer Build Plan
 
 Condensed from Tommy's 7 original prompts. Numeric parameters live in `config.yaml`
 (single source of truth); this doc preserves structure/intent. **ALL 7 LAYERS DONE.**

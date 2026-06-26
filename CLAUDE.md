@@ -1,4 +1,4 @@
-# Meridian Capital Partners — Project Memory (alpaca-hedge-fund)
+# Mediajedi Hedge Fund — Project Memory (alpaca-hedge-fund)
 
 Long/short equity hedge-fund system on a **dedicated Alpaca paper account**.
 Built as 7 layers (see `docs/BUILD_PLAN.md`). Runs in a Docker container on the NAS.

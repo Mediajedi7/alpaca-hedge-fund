@@ -1,4 +1,4 @@
-# Meridian Capital Partners
+# Mediajedi Hedge Fund
 
 A long/short equity hedge-fund system trading a **dedicated Alpaca paper account**.
 Built as 7 layers; runs in a Docker container on the NAS. Completely separate from the
