@@ -158,12 +158,16 @@ and `cache/meridian.db` (the only non-reproducible state) are covered there.
   → `git clone` the repo → regenerate the NAS SSH key
   (`ssh-keygen -t ed25519 -f ~/.ssh/claude_nas`, paste the `.pub` into the NAS
   `~/.ssh/authorized_keys`). Secrets/keys are intentionally NOT in git.
-- **Claude memory is versioned.** The memory files live in `docs/claude-memory/` and the
-  canonical Claude path (`~/.claude/projects/-Users-tommy-Workspace-alpaca-hedge-fund/memory`)
-  is a **symlink** to that dir, so memory writes land in the repo and ride the backup.
-  On a fresh laptop, recreate the symlink after cloning:
-  `ln -s "$PWD/docs/claude-memory" ~/.claude/projects/-Users-tommy-Workspace-alpaca-hedge-fund/memory`
-  (rm the auto-created dir first if Claude Code already made one).
+- **Claude memory is versioned.** The memory files live in `agent-memory/` (same convention
+  as the day-trader) and the canonical Claude path
+  (`~/.claude/projects/-Users-tommy-Workspace-alpaca-hedge-fund/memory`) is a **symlink** to
+  it, so memory writes land in the repo and ride the backup.
+- **Central restore.** This project is wired into the `claude-backup` repo's `restore.sh`
+  (`PROJECTS="alpaca-day-trading alpaca-hedge-fund tktech-seo"`): on a fresh machine it clones
+  the repo, seeds `.env` from `.env.example`, and recreates the memory symlink via `link_memory`
+  (which expects `agent-memory/` — that's why this project uses that dir name, not `docs/`).
+  Manual fallback if needed:
+  `ln -s "$PWD/agent-memory" ~/.claude/projects/-Users-tommy-Workspace-alpaca-hedge-fund/memory`.
 
 ## Full-universe runtime
 Tested on small subsets. A full 503-ticker run is slow (yfinance `.info` ≈ 500 calls,
