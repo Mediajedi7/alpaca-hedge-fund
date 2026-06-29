@@ -1,0 +1,7 @@
+# Memory Index — Mediajedi Hedge Fund (alpaca-hedge-fund)
+
+Separate project from `alpaca-paper-trading` (the day trader). No shared code/data/creds.
+Primary restart context lives in the repo: `CLAUDE.md` + `docs/BUILD_PLAN.md`.
+
+- [Project State](project-state.md) — what's built, what's next (resume at Layer 2)
+- [Commit by default](commit-by-default.md) — always commit completed changes; push = deploy

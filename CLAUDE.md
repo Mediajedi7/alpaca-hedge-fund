@@ -150,6 +150,21 @@ The macOS launchd plist in the original prompt is SUPERSEDED by the container's 
   which doesn't exist until Layer 2 — it errors nightly until then (harmless). Optionally
   point it at `run_data.py --no-filings --no-13f` in the meantime.
 
+## Disaster recovery / new-laptop setup
+The laptop is NOT part of the runtime — JARVIS runs entirely on the NAS (two Docker
+containers) + GitHub. The NAS Docker dir is backed up nightly + snapshotted, so `.env`
+and `cache/meridian.db` (the only non-reproducible state) are covered there.
+- **Laptop dies → fund keeps running.** New laptop: install Claude Code → `gh auth login`
+  → `git clone` the repo → regenerate the NAS SSH key
+  (`ssh-keygen -t ed25519 -f ~/.ssh/claude_nas`, paste the `.pub` into the NAS
+  `~/.ssh/authorized_keys`). Secrets/keys are intentionally NOT in git.
+- **Claude memory is versioned.** The memory files live in `docs/claude-memory/` and the
+  canonical Claude path (`~/.claude/projects/-Users-tommy-Workspace-alpaca-hedge-fund/memory`)
+  is a **symlink** to that dir, so memory writes land in the repo and ride the backup.
+  On a fresh laptop, recreate the symlink after cloning:
+  `ln -s "$PWD/docs/claude-memory" ~/.claude/projects/-Users-tommy-Workspace-alpaca-hedge-fund/memory`
+  (rm the auto-created dir first if Claude Code already made one).
+
 ## Full-universe runtime
 Tested on small subsets. A full 503-ticker run is slow (yfinance `.info` ≈ 500 calls,
 FMP fundamentals ≈ 2000 calls). Expect 20–40+ min; the daily job uses `--no-filings --no-13f`.
