@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from analysis.base import AnalysisContext, run_cached
 from analysis.cache import artifact_hash
+from analysis.style import PLAIN_LANGUAGE
 from core.config import cfg
 from core.db import ensure_tables, get_conn
 
@@ -25,6 +26,7 @@ _SYSTEM = (
     '  "key_quotes": [<string>...], "one_line_summary": <string>\n'
     "}"
 )
+_SYSTEM += "\n\n" + PLAIN_LANGUAGE
 
 
 def _transcript(ticker: str) -> tuple[str, str] | None:

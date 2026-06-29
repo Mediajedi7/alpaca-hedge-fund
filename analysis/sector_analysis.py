@@ -7,6 +7,7 @@ import json
 from analysis import cache
 from analysis.base import AnalysisContext, run_cached
 from analysis.cache import artifact_hash
+from analysis.style import PLAIN_LANGUAGE
 from core.db import get_conn
 
 ANALYZER = "sector"
@@ -23,6 +24,7 @@ _SYSTEM = (
     '  "sector_outlook": <string>\n'
     "}"
 )
+_SYSTEM += "\n\n" + PLAIN_LANGUAGE
 
 
 def _sector_names(sector: str, asof: str) -> list[dict]:

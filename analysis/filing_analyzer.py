@@ -6,6 +6,7 @@ import json
 
 from analysis.base import AnalysisContext, run_cached
 from analysis.cache import artifact_hash
+from analysis.style import PLAIN_LANGUAGE
 from core.db import get_conn
 
 ANALYZER = "filing"
@@ -24,6 +25,7 @@ _SYSTEM = (
     '  "one_line_summary": <string>\n'
     "}"
 )
+_SYSTEM += "\n\n" + PLAIN_LANGUAGE
 
 _COLS = ["period_end", "revenue", "net_income", "operating_cash_flow", "free_cash_flow",
          "gross_margin", "net_margin", "cfo_to_ni", "accruals_ratio", "ar_to_revenue",

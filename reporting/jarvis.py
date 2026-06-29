@@ -7,6 +7,7 @@ from datetime import date, datetime
 
 from analysis.api_client import APIClient
 from analysis.cost_tracker import CostTracker
+from analysis.style import PLAIN_LANGUAGE
 from core.config import cfg
 from core.db import ensure_tables, get_conn
 from core.log import get_logger
@@ -19,6 +20,7 @@ PERSONA = (
     "never hype. You ground every statement in the provided system snapshot. When you lack "
     "data, say so plainly. Numbers are sector-percentile scores (0-100) unless noted."
 )
+PERSONA += "\n\n" + PLAIN_LANGUAGE
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS lp_letters (for_date TEXT PRIMARY KEY, content TEXT, created_at TEXT);

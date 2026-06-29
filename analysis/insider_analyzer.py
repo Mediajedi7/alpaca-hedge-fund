@@ -8,6 +8,7 @@ from datetime import date, timedelta
 
 from analysis.base import AnalysisContext, run_cached
 from analysis.cache import artifact_hash
+from analysis.style import PLAIN_LANGUAGE
 from core.db import get_conn
 
 ANALYZER = "insider"
@@ -26,6 +27,7 @@ _SYSTEM = (
     '  "one_line_summary": <string>\n'
     "}"
 )
+_SYSTEM += "\n\n" + PLAIN_LANGUAGE
 
 
 def _transactions(ticker: str) -> list[dict]:
