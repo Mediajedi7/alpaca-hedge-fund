@@ -97,6 +97,37 @@ def _positions():
     return sorted(rows, key=lambda r: -abs(r["market_value"]))
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def _open_days():
+    """Days each currently-held position has been open, reconstructed from the
+    filled-orders log: walk fills chronologically per ticker, keep a running
+    signed-share total (buy +, sell −), and note the date of the most recent
+    crossing into the current direction. Returns {ticker: {"days": int,
+    "approx": bool}}; approx=True means the opening fill predates our order
+    history so the count is a floor (we fell back to the earliest known fill)."""
+    import datetime as dt
+    df = _q("SELECT ticker, substr(ts,1,10) d, side, shares FROM orders "
+            "WHERE status='filled' ORDER BY ts ASC")
+    today = dt.date.today()
+    out = {}
+    for tkr, g in df.groupby("ticker"):
+        cum, open_d, clean = 0.0, None, False
+        earliest = g["d"].iloc[0]
+        for _, row in g.iterrows():
+            signed = row["shares"] if row["side"] == "buy" else -row["shares"]
+            prev, cum = cum, cum + signed
+            if abs(cum) < 1e-9:                 # returned flat → leg closed
+                open_d = None
+            elif (prev > 0) != (cum > 0) or abs(prev) < 1e-9:
+                open_d, clean = row["d"], True  # opened (from flat) or flipped sign
+        if abs(cum) < 1e-9:
+            continue                            # not currently held
+        ref = open_d or earliest
+        out[tkr] = {"days": (today - dt.date.fromisoformat(ref)).days,
+                    "approx": not (clean and open_d)}
+    return out
+
+
 @st.dialog("Open positions", width="large")
 def _positions_dialog():
     try:
@@ -125,6 +156,11 @@ def _positions_dialog():
         + _stat("Unrealized P&amp;L", f"{upl:+,.0f}", ucol)
         + '</div>', unsafe_allow_html=True)
 
+    try:
+        held = _open_days()
+    except Exception:  # noqa: BLE001 - holding-period badge is best-effort
+        held = {}
+
     box = st.container(height=440)
     with box:
         for r in rows:
@@ -134,6 +170,14 @@ def _positions_dialog():
             basis = entry * abs(qty)
             ret = (pl / basis * 100) if basis else 0.0
             pcol = theme.LONG if pl >= 0 else theme.SHORT
+            # held-for badge on shorts (days since this short leg was opened)
+            held_html = ""
+            h = held.get(r["symbol"]) if qty < 0 else None
+            if h:
+                lbl = f"held {'≥' if h['approx'] else ''}{h['days']}d"
+                held_html = ('<span style="font-family:monospace;font-size:11px;color:#d8a93a;'
+                             'border:1px solid #5c4d18;border-radius:3px;padding:1px 5px;'
+                             f'margin-left:2px">{lbl}</span>')
             st.markdown(
                 '<div style="display:flex;align-items:center;justify-content:space-between;'
                 'padding:9px 2px;border-bottom:1px solid #232b40">'
@@ -141,7 +185,8 @@ def _positions_dialog():
                 f'<span style="font-family:monospace;font-size:9px;font-weight:800;color:{scol};'
                 f'border:1px solid {scol};border-radius:3px;padding:1px 5px">{side}</span>'
                 f'<span style="font-weight:700;font-family:monospace">{r["symbol"]}</span>'
-                f'<span style="color:#8a93ad;font-size:12px">{abs(qty):g} sh @ ${entry:,.2f}</span></div>'
+                f'<span style="color:#8a93ad;font-size:12px">{abs(qty):g} sh @ ${entry:,.2f}</span>'
+                f'{held_html}</div>'
                 '<div style="text-align:right;font-family:monospace">'
                 f'<div style="font-weight:700">${abs(mv):,.0f}</div>'
                 f'<div style="color:{pcol};font-size:12px">{pl:+,.0f} ({ret:+.1f}%)</div>'
