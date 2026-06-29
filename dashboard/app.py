@@ -86,6 +86,68 @@ def _account():
     return {"equity": float(a.equity), "last_equity": float(a.last_equity), "cash": float(a.cash)}
 
 
+@st.cache_data(ttl=30, show_spinner=False)
+def _positions():
+    """Live open positions from the Alpaca paper account (cached briefly).
+    Returns a list of plain dicts (cache-serializable), sorted by gross value desc."""
+    from execution.broker import Broker
+    pos = Broker().positions().values()
+    rows = [{"symbol": p.symbol, "qty": p.qty, "market_value": p.market_value,
+             "unrealized_pl": p.unrealized_pl, "avg_entry_price": p.avg_entry_price} for p in pos]
+    return sorted(rows, key=lambda r: -abs(r["market_value"]))
+
+
+@st.dialog("Open positions", width="large")
+def _positions_dialog():
+    try:
+        rows = _positions()
+    except Exception as e:  # noqa: BLE001
+        st.error(f"Couldn't load live positions: {e}")
+        return
+    if not rows:
+        st.caption("No open positions in the account.")
+        return
+    gross = sum(abs(r["market_value"]) for r in rows)
+    net = sum(r["market_value"] for r in rows)
+    upl = sum(r["unrealized_pl"] for r in rows)
+    ucol = theme.LONG if upl >= 0 else theme.SHORT
+
+    def _stat(label, value, color="#f3f5fb"):
+        return (f'<div><div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;'
+                f'color:#8a93ad">{label}</div>'
+                f'<div style="font-size:20px;font-weight:800;font-family:monospace;color:{color}">{value}</div></div>')
+
+    st.markdown(
+        '<div style="display:flex;gap:28px;margin:2px 0 10px">'
+        + _stat("Positions", len(rows))
+        + _stat("Gross", f"${gross:,.0f}")
+        + _stat("Net", f"${net:,.0f}")
+        + _stat("Unrealized P&amp;L", f"{upl:+,.0f}", ucol)
+        + '</div>', unsafe_allow_html=True)
+
+    box = st.container(height=440)
+    with box:
+        for r in rows:
+            qty, mv, pl, entry = r["qty"], r["market_value"], r["unrealized_pl"], r["avg_entry_price"]
+            side = "LONG" if qty >= 0 else "SHORT"
+            scol = theme.LONG if qty >= 0 else theme.SHORT
+            basis = entry * abs(qty)
+            ret = (pl / basis * 100) if basis else 0.0
+            pcol = theme.LONG if pl >= 0 else theme.SHORT
+            st.markdown(
+                '<div style="display:flex;align-items:center;justify-content:space-between;'
+                'padding:9px 2px;border-bottom:1px solid #232b40">'
+                '<div style="display:flex;align-items:center;gap:10px">'
+                f'<span style="font-family:monospace;font-size:9px;font-weight:800;color:{scol};'
+                f'border:1px solid {scol};border-radius:3px;padding:1px 5px">{side}</span>'
+                f'<span style="font-weight:700;font-family:monospace">{r["symbol"]}</span>'
+                f'<span style="color:#8a93ad;font-size:12px">{abs(qty):g} sh @ ${entry:,.2f}</span></div>'
+                '<div style="text-align:right;font-family:monospace">'
+                f'<div style="font-weight:700">${abs(mv):,.0f}</div>'
+                f'<div style="color:{pcol};font-size:12px">{pl:+,.0f} ({ret:+.1f}%)</div>'
+                '</div></div>', unsafe_allow_html=True)
+
+
 def page_portfolio():
     m = jarvis.metrics()
     left, right = st.columns([44, 56], gap="large")
@@ -117,6 +179,15 @@ def page_portfolio():
                 '</div>', unsafe_allow_html=True)
         except Exception as e:  # noqa: BLE001
             st.caption(f"Live account data unavailable: {e}")
+
+        # clickable: open a scrollable popup of all current open positions + values
+        try:
+            npos = len(_positions())
+        except Exception:  # noqa: BLE001
+            npos = None
+        if st.button(f"▦  View open positions{f'  ({npos})' if npos is not None else ''}  →",
+                     key="view_positions"):
+            _positions_dialog()
 
         if asked and q:
             with st.spinner("JARVIS analyzing…"):
