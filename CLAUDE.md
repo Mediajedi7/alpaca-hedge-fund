@@ -176,7 +176,10 @@ The macOS launchd plist in the original prompt is SUPERSEDED by the container's 
 - **Deploy = `git push`.** The NAS dir is a git clone of the repo; the `*/5` cron runs
   `git pull --ff-only`, so any pushed commit auto-deploys within ~5 min (push from any
   Claude session, incl. phone). Scripts run fresh per cron so they pick up new code; the
-  dashboard runs with `--server.runOnSave` so it reloads app/theme changes on pull.
+  dashboard runs with `--server.runOnSave`, which reruns `app.py` on pull BUT does NOT
+  reliably hot-reload imported modules — **a `dashboard/theme.py` (CSS) or other
+  imported-module change needs a dashboard container restart to take effect** (see
+  [[dashboard-theme-reload]]): `... && docker restart alpaca-hedge-fund-dashboard`.
   For an immediate pull: `./nas.sh "docker exec alpaca-hedge-fund sh -c 'cd /app && git pull --ff-only'"`.
 - ⚠️ `.env` and `cache/` (the ~3.2 GB DB) are gitignored and live ONLY on the NAS — never
   committed, never overwritten by a pull. The NAS `.env` is authoritative (secrets +
@@ -184,6 +187,7 @@ The macOS launchd plist in the original prompt is SUPERSEDED by the container's 
 - **Still needs a manual step** (not covered by auto-pull):
   - `requirements.txt` or `Dockerfile` change → rebuild: `./nas.sh "cd /volume2/Docker/AlpacaHedgeFund && docker compose build fund && docker compose up -d"`.
   - `crontab` or `docker-compose.yml` change → recreate so supercronic/compose reload: `docker compose up -d`.
+  - `dashboard/theme.py` or any imported-module change → restart so it's reloaded: `./nas.sh "docker restart alpaca-hedge-fund-dashboard"` (app.py-only changes reload via runOnSave).
 - Test fast against the running container: `./nas.sh "docker exec alpaca-hedge-fund sh -c 'cd /app && python3 -m data.<module> AAPL'"`.
 - **Cron caveat:** `crontab` runs `run_scoring.py --no-filings --no-13f` weekdays 17:15 ET,
   which doesn't exist until Layer 2 — it errors nightly until then (harmless). Optionally
