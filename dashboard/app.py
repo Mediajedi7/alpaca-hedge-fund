@@ -144,12 +144,15 @@ def _positions_dialog():
     ucol = theme.LONG if upl >= 0 else theme.SHORT
 
     def _stat(label, value, color="#f3f5fb"):
-        return (f'<div><div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;'
-                f'color:#8a93ad">{label}</div>'
-                f'<div style="font-size:20px;font-weight:800;font-family:monospace;color:{color}">{value}</div></div>')
+        return (f'<div style="min-width:0"><div style="font-size:10px;letter-spacing:.1em;'
+                f'text-transform:uppercase;color:#8a93ad;white-space:nowrap">{label}</div>'
+                f'<div style="font-size:19px;font-weight:800;font-family:monospace;color:{color};'
+                f'white-space:nowrap">{value}</div></div>')
 
+    # responsive grid: 4-across on desktop, wraps to 2-across on a narrow phone (no h-scroll)
     st.markdown(
-        '<div style="display:flex;gap:28px;margin:2px 0 10px">'
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));'
+        'gap:8px 16px;margin:2px 0 12px">'
         + _stat("Positions", len(rows))
         + _stat("Gross", f"${gross:,.0f}")
         + _stat("Net", f"${net:,.0f}")
@@ -180,14 +183,14 @@ def _positions_dialog():
                              f'margin-left:2px">{lbl}</span>')
             st.markdown(
                 '<div style="display:flex;align-items:center;justify-content:space-between;'
-                'padding:9px 2px;border-bottom:1px solid #232b40">'
-                '<div style="display:flex;align-items:center;gap:10px">'
+                'gap:8px;padding:9px 2px;border-bottom:1px solid #232b40">'
+                '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;min-width:0">'
                 f'<span style="font-family:monospace;font-size:9px;font-weight:800;color:{scol};'
                 f'border:1px solid {scol};border-radius:3px;padding:1px 5px">{side}</span>'
                 f'<span style="font-weight:700;font-family:monospace">{r["symbol"]}</span>'
                 f'<span style="color:#8a93ad;font-size:12px">{abs(qty):g} sh @ ${entry:,.2f}</span>'
                 f'{held_html}</div>'
-                '<div style="text-align:right;font-family:monospace">'
+                '<div style="text-align:right;font-family:monospace;flex-shrink:0">'
                 f'<div style="font-weight:700">${abs(mv):,.0f}</div>'
                 f'<div style="color:{pcol};font-size:12px">{pl:+,.0f} ({ret:+.1f}%)</div>'
                 '</div></div>', unsafe_allow_html=True)
