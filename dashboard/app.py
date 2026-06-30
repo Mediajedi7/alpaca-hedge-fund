@@ -128,7 +128,7 @@ def _open_days():
     return out
 
 
-@st.dialog("Open positions", width="large")
+@st.dialog("Open positions")
 def _positions_dialog():
     try:
         rows = _positions()
