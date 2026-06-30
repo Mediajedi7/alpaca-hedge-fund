@@ -148,11 +148,15 @@ h1,h2,h3,h4 {{ font-family: '{SANS}', sans-serif; font-weight: 800; color: #f3f5
   .block-container, .stMainBlockContainer {{ padding-left: .8rem !important; padding-right: .8rem !important; }}
   .mgrid {{ grid-template-columns: repeat(3, 1fr) !important; }}
   .acct {{ flex-direction: column !important; }}
-  /* st.dialog is a fixed-width modal that overflows a phone. [data-testid="stDialog"] IS the
-     dialog box — clamp it (and its content wrapper) to the viewport so the open-positions
-     header/rows reflow instead of forcing horizontal scroll. */
-  [data-testid="stDialog"] {{ width: 96vw !important; max-width: 96vw !important; min-width: 0 !important; overflow-x: hidden !important; }}
-  [data-testid="stDialog"] > div, [data-testid="stDialog"] [data-testid="stVerticalBlock"] {{ width: 100% !important; max-width: 100% !important; min-width: 0 !important; }}
+  /* st.dialog is a fixed-width modal that overflows a phone. Clamp it to the viewport by
+     EVERY plausible handle — the testid box, the ARIA role element (baseweb modal-dialog),
+     and the content wrapper — so the open-positions header/rows reflow without h-scroll.
+     (Only the positions popup uses st.dialog; the auth screen is inline, not a dialog.) */
+  [data-testid="stDialog"],
+  [data-testid="stDialog"] > div,
+  div[role="dialog"],
+  [data-baseweb="modal"] [role="dialog"] {{ width: 96vw !important; max-width: 96vw !important;
+                                            min-width: 0 !important; overflow-x: hidden !important; }}
 }}
 </style>
 """
