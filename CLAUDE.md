@@ -9,6 +9,26 @@ project. **No shared code, data, strategies, or credentials.** Do not pull anyth
 from that project unless Tommy explicitly says to. Both are paper accounts (the
 live/paper rule still applies — never touch live from here).
 
+## ⚠️ Going live — HARD PREREQUISITE (read before any live cutover)
+When Tommy says we're moving to a **live Alpaca account**, the **SIP market-data
+subscription is a REQUIREMENT, not optional** — set it up BEFORE the first live
+rebalance. Surface this and gate the cutover on it; do not proceed to live without it.
+- **Why:** execution sets limit prices off the data feed. The free **IEX** feed gives
+  usable two-sided quotes for only a sliver of names (verified ~1/20; many 9%+ spreads
+  or no ask), so the executor falls back to `stale-ref ± marketable_offset` → poor fills
+  (a real run filled only 62%: buys 75%, sells 46%, because the market gapped past the
+  tight 0.30% offset). The cheap paper workaround (widen `marketable_offset`) is fine on
+  paper because Alpaca *simulates* fills, but on LIVE a wide offset means you cross the
+  spread by that much and **pay real slippage every trade**. SIP (full NBBO, Alpaca
+  "Algo Trader Plus", ~$99/mo — verify current price) lets you keep tight limits AND fill.
+- **The data feed is independent of paper-vs-live** — going live does NOT auto-grant SIP;
+  it's a separate subscription, and the code defaults to IEX
+  (`StockHistoricalDataClient(key, secret)` with no `feed=` arg in `execution/broker.py`).
+- Live also still requires `config fund.mode: live` + the typed confirmation in
+  `execution/broker.py` (paper is hardcoded today). SIP is an ADDITIONAL gate on top.
+- Tommy's standing instruction (2026-06-29): "fix nothing now; make SIP a requirement when
+  we go live." See [[going-live-requirements]].
+
 ## STATUS — resume here
 - **Layer 1 (Data Infrastructure): COMPLETE & verified live.** All 7 sources. `4152f83`.
 - **Layer 2 (Scoring Engine): COMPLETE & verified live.** 8 factors / 27 sub-factors in
