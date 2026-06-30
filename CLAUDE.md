@@ -29,6 +29,25 @@ rebalance. Surface this and gate the cutover on it; do not proceed to live witho
 - Tommy's standing instruction (2026-06-29): "fix nothing now; make SIP a requirement when
   we go live." See [[going-live-requirements]].
 
+**Live cutover checklist (guarded tooling built 2026-06-29):**
+1. Open a live Alpaca account; add `ALPACA_LIVE_API_KEY` + `ALPACA_LIVE_SECRET_KEY` to the
+   NAS `.env` (keep the paper keys — `broker._creds()` picks per `fund.mode`, paper falls
+   back to the legacy `ALPACA_API_KEY/SECRET_KEY`).
+2. Subscribe to SIP (Alpaca Algo Trader Plus). Set `config execution.data_feed: sip`.
+3. **Reset the numbers (optional, usually yes):** `python3 -m scripts.reset_track_record`
+   (dry-run) then `--confirm`. Backs up the DB, clears track-record tables only
+   (cash_flows, equity_curve, orders, lp_letters, jarvis_commentary, veto_rejections,
+   output/daily_attribution.csv) and PRESERVES model/market data. Then hand-edit
+   `fund.starting_capital` + `fund.inception` in config.yaml as it prints.
+4. **Preflight:** `python3 -m scripts.go_live` (read-only) — verifies live keys, SIP
+   entitlement, `data_feed: sip`, clean record. Resolve any FAIL.
+5. Set `config fund.mode: live` (do this last).
+6. **Arm:** `python3 -m scripts.go_live --arm` — writes `cache/LIVE_ARMED.lock` so the cron
+   auto-executor can trade live non-interactively (manual runs still accept the typed
+   prompt; `ALPACA_LIVE_CONFIRMED` env also works). Disarm = delete the lock / set mode:paper.
+- These changes are backward-compatible: with `mode: paper` + `data_feed: iex` (current
+  defaults) behavior is unchanged.
+
 ## STATUS — resume here
 - **Layer 1 (Data Infrastructure): COMPLETE & verified live.** All 7 sources. `4152f83`.
 - **Layer 2 (Scoring Engine): COMPLETE & verified live.** 8 factors / 27 sub-factors in

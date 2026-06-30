@@ -171,6 +171,11 @@ execution:
                                    # dashboard Execution page (cache/auto_execute.flag overrides)
   stale_book_max_days: 4           # auto-exec warns (emails ⚠ STALE) if the target book is
                                    # older than this many calendar days (Fri->Mon = 3 = normal)
+  data_feed: "iex"                 # market-data feed: iex (free, default) | sip. MUST be sip
+                                   # for live (see CLAUDE.md 'Going live'); IEX quotes are too
+                                   # sparse -> stale-ref limits -> poor fills.
+  live_arm_lock: "cache/LIVE_ARMED.lock"  # written by scripts.go_live to arm non-interactive
+                                   # (cron) live trading; delete it to disarm.
 
 # -----------------------------------------------------------------------------
 # LAYER 7 — Reporting + Dashboard

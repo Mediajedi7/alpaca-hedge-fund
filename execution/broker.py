@@ -5,18 +5,49 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 from alpaca.common.exceptions import APIError
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.trading.requests import LimitOrderRequest
 
-from core.config import cfg, env
+from core.config import ROOT, cfg, env
 from core.log import get_logger
 
 log = get_logger("broker")
 
 LIVE_CONFIRMATION = "YES I UNDERSTAND THE RISKS"
+
+
+def _creds(paper: bool) -> tuple[str, str]:
+    """Pick API creds for the mode. Live REQUIRES ALPACA_LIVE_*; paper prefers
+    ALPACA_PAPER_* but falls back to the legacy ALPACA_API_KEY/SECRET_KEY so existing
+    paper setups keep working unchanged. Keeping both name pairs in .env lets `fund.mode`
+    flip paper<->live without swapping keys."""
+    if paper:
+        key = env("ALPACA_PAPER_API_KEY") or env("ALPACA_API_KEY", required=True)
+        secret = env("ALPACA_PAPER_SECRET_KEY") or env("ALPACA_SECRET_KEY", required=True)
+    else:
+        key = env("ALPACA_LIVE_API_KEY", required=True)
+        secret = env("ALPACA_LIVE_SECRET_KEY", required=True)
+    return key, secret
+
+
+def _live_armed(confirm_fn) -> bool:
+    """Live trading needs an explicit confirmation. Non-interactive arming (so the cron
+    auto-executor can trade live once a human has armed it via scripts.go_live): a lock
+    file or env var holding the exact phrase. Otherwise fall back to an interactive prompt."""
+    if (env("ALPACA_LIVE_CONFIRMED") or "").strip() == LIVE_CONFIRMATION:
+        return True
+    lock = Path(ROOT / cfg.get("execution.live_arm_lock", "cache/LIVE_ARMED.lock"))
+    try:
+        if lock.exists() and lock.read_text().strip() == LIVE_CONFIRMATION:
+            log.warning("LIVE armed via lock file %s", lock)
+            return True
+    except OSError:
+        pass
+    return confirm_fn(f'Type "{LIVE_CONFIRMATION}" to trade LIVE: ').strip() == LIVE_CONFIRMATION
 
 
 def _to_alpaca(symbol: str) -> str:
@@ -42,12 +73,12 @@ class Broker:
         mode = str(cfg.get("fund.mode", "paper")).lower()
         self.paper = mode != "live"
         if not self.paper:
-            # Live requires an explicit typed confirmation in addition to config.
-            if confirm_fn(f'Type "{LIVE_CONFIRMATION}" to trade LIVE: ').strip() != LIVE_CONFIRMATION:
+            # Live requires explicit arming (config mode:live is necessary but NOT sufficient).
+            if not _live_armed(confirm_fn):
                 raise SystemExit("Live trading not confirmed — aborting.")
             log.warning("LIVE TRADING ENABLED")
-        self.client = TradingClient(env("ALPACA_API_KEY", required=True),
-                                    env("ALPACA_SECRET_KEY", required=True), paper=self.paper)
+        key, secret = _creds(self.paper)
+        self.client = TradingClient(key, secret, paper=self.paper)
         log.info("Broker connected (paper=%s)", self.paper)
 
     def _retry(self, fn, *args, attempts: int = 5, **kwargs):
@@ -90,9 +121,19 @@ class Broker:
     def _data_client(self):
         if getattr(self, "_data", None) is None:
             from alpaca.data.historical import StockHistoricalDataClient
-            self._data = StockHistoricalDataClient(env("ALPACA_API_KEY", required=True),
-                                                   env("ALPACA_SECRET_KEY", required=True))
+            key, secret = _creds(self.paper)
+            self._data = StockHistoricalDataClient(key, secret)
         return self._data
+
+    def _feed(self):
+        """Market-data feed for quote/trade requests. Default IEX (free). Set
+        `execution.data_feed: sip` once a SIP subscription is active (required for live —
+        see CLAUDE.md 'Going live'). Returns None to leave the SDK default (IEX)."""
+        name = str(cfg.get("execution.data_feed", "") or "").lower()
+        if name in ("sip", "iex"):
+            from alpaca.data.enums import DataFeed
+            return DataFeed.SIP if name == "sip" else DataFeed.IEX
+        return None
 
     def latest_prices(self, symbols: list[str]) -> dict[str, float]:
         """Latest trade price per symbol from Alpaca market data (IEX feed on paper).
@@ -101,10 +142,11 @@ class Broker:
             return {}
         from alpaca.data.requests import StockLatestTradeRequest
         amap = {_to_alpaca(s): s for s in symbols}
-        out: dict[str, float] = {}
+        feed, out = self._feed(), {}
+        kw = {"feed": feed} if feed else {}
         try:
             res = self._data_client().get_stock_latest_trade(
-                StockLatestTradeRequest(symbol_or_symbols=list(amap)))
+                StockLatestTradeRequest(symbol_or_symbols=list(amap), **kw))
             for asym, tr in res.items():
                 out[amap.get(asym, _from_alpaca(asym))] = float(tr.price)
         except Exception as e:  # noqa: BLE001 - caller falls back to last close
@@ -121,10 +163,11 @@ class Broker:
         from alpaca.data.requests import StockLatestQuoteRequest
         max_spread = float(cfg.get("execution.max_quote_spread", 0.02))
         amap = {_to_alpaca(s): s for s in symbols}
-        out: dict[str, tuple[float, float]] = {}
+        feed, out = self._feed(), {}
+        kw = {"feed": feed} if feed else {}
         try:
             res = self._data_client().get_stock_latest_quote(
-                StockLatestQuoteRequest(symbol_or_symbols=list(amap)))
+                StockLatestQuoteRequest(symbol_or_symbols=list(amap), **kw))
             for asym, q in res.items():
                 bid, ask = float(q.bid_price), float(q.ask_price)
                 if bid > 0 and ask >= bid and (ask - bid) / ((bid + ask) / 2.0) <= max_spread:
