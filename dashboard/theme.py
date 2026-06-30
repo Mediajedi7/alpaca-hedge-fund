@@ -148,6 +148,11 @@ h1,h2,h3,h4 {{ font-family: '{SANS}', sans-serif; font-weight: 800; color: #f3f5
   .block-container, .stMainBlockContainer {{ padding-left: .8rem !important; padding-right: .8rem !important; }}
   .mgrid {{ grid-template-columns: repeat(3, 1fr) !important; }}
   .acct {{ flex-direction: column !important; }}
+  /* st.dialog (width="large") is a fixed ~700px modal that overflows a phone — clamp it to
+     the viewport so the open-positions popup header/rows fit without horizontal scroll */
+  [data-testid="stDialog"] div[role="dialog"],
+  [data-testid="stDialog"] > div > div {{ width: 94vw !important; max-width: 94vw !important; min-width: 0 !important; }}
+  [data-testid="stDialog"] {{ overflow-x: hidden !important; }}
 }}
 </style>
 """
