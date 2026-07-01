@@ -8,4 +8,3 @@ Primary restart context lives in the repo: `CLAUDE.md` + `docs/BUILD_PLAN.md`.
 - [Going-live requirements](going-live-requirements.md) — SIP feed is a HARD prereq before any live cutover
 - [Dashboard theme reload](dashboard-theme-reload.md) — theme.py/CSS edits need a dashboard container restart, not just git pull
 - [Login page TODO](login-page-todo.md) — pending login-page fixes (deferred 2026-06-29), ask for specifics
-- [Re-neutralize pending](reneutralize-pending.md) — book at +32% net long; run re-neutralization during market hours (offset already widened)
