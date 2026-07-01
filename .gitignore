@@ -20,3 +20,6 @@ output/
 
 # OS
 .DS_Store
+
+# Claude Code personal (local) config — never commit
+.claude/settings.local.json
