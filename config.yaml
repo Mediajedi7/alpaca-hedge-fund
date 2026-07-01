@@ -160,7 +160,10 @@ execution:
   limit_offset: 0.001              # (legacy) close * (1 +/- 0.001)
   quote_cross_buffer: 0.001        # buy through the ASK / sell through the BID by this much (primary)
   max_quote_spread: 0.02           # ignore NBBO quotes wider than this (stale/off-hours) -> use last trade
-  marketable_offset: 0.003         # fallback: mark this far through the last trade when no NBBO quote
+  marketable_offset: 0.01          # fallback: mark this far through the last trade when no NBBO quote.
+                                   # Widened 0.003->0.01 (2026-06-30) so sells/shorts actually fill on the
+                                   # sparse IEX feed (Mon fill rate was 46% on sells). Paper-safe (fills are
+                                   # simulated); revisit once SIP is live. See CLAUDE.md 'Going live'.
   chunk_threshold_pct_adv: 0.02    # chunk orders larger than 2% ADV
   time_in_force_secs: 120
   poll_interval_secs: 5
